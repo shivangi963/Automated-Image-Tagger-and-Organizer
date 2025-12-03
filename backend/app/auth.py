@@ -15,9 +15,11 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 # JWT bearer token
 security = HTTPBearer()
 
+
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a plain password against hashed password"""
     return pwd_context.verify(plain_password, hashed_password)
+
 
 def get_password_hash(password: str) -> str:
     """Hash a password"""
@@ -41,34 +43,39 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
-    db = Depends(get_database)
-):
-    """Get current authenticated user"""
+    db=Depends(get_database)
+    ):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
-    
+
     try:
         token = credentials.credentials
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        email: str = payload.get("sub")
-        
-        if email is None:
+        payload = jwt.decode(
+            token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
+        )
+
+        user_id: str = payload.get("sub")
+        if user_id is None:
             raise credentials_exception
-        
-        token_data = TokenData(email=email)
-        
+
+        # Validate ObjectId
+        try:
+            user_obj_id = ObjectId(user_id)
+        except:
+            raise credentials_exception
+
     except JWTError:
         raise credentials_exception
-    
-    user = await db.users.find_one({"email": token_data.email})
-    
+
+    user = await db.users.find_one({"_id": user_obj_id})
     if user is None:
         raise credentials_exception
-    
+
     return user
+
 
 
 def get_user_id(user: dict) -> str:

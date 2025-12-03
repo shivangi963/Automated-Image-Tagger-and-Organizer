@@ -13,10 +13,25 @@ export const setToken = newToken => {
   else localStorage.removeItem('jwt');
 };
 
-export const api = () => {
+export const api = (token) => {
   const instance = axios.create({ baseURL: API_BASE });
+  
   if (token) {
     instance.defaults.headers.common.Authorization = `Bearer ${token}`;
   }
+
+  // Add response interceptor to handle 401 errors
+  instance.interceptors.response.use(
+    (response) => response,
+    (error) => {
+      if (error.response?.status === 401) {
+        // Token expired - clear it and redirect to login
+        localStorage.removeItem('jwt');
+        window.location.href = '/login';
+      }
+      return Promise.reject(error);
+    }
+  );
+
   return instance;
 };

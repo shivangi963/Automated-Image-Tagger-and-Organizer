@@ -3,9 +3,19 @@ from app.config import settings
 import logging
 from typing import List, Dict
 import numpy as np
+import torch 
+
 
 logger = logging.getLogger(__name__)
+import functools
+# Save the original torch.load function
+_original_torch_load = torch.load
 
+def torch_unsafe_load(*args, **kwargs):
+    # Ensure weights_only is explicitly set to False
+    kwargs['weights_only'] = False
+    return _original_torch_load(*args, **kwargs)
+torch.load = torch_unsafe_load
 
 class YOLODetector:
     def __init__(self):

@@ -20,43 +20,43 @@ import SearchIcon from '@mui/icons-material/Search';
 import LogoutIcon from '@mui/icons-material/Logout';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { api, setToken } from '../store/auth.js';
-
-async function fetchImages(search) {
-  const client = api();
-  if (search) {
-    const res = await client.get('/search', { params: { query: search } });
-    return res.data.images;
-  }
-  const res = await client.get('/images');
-  return res.data.images;
-}
-
-async function presignUpload(file) {
-  const client = api();
-  const res = await client.post('/uploads/presign', {
-    filename: file.name,
-    mime: file.type,
-  });
-  return res.data; // adjust fields to backend
-}
-
-async function ingestImage(payload) {
-  const client = api();
-  const res = await client.post('/images/ingest', payload);
-  return res.data;
-}
+import { useToken } from '../hooks/useToken.js';
+import { api } from '../store/auth.js';
+import { Link as RouterLink } from 'react-router-dom';
 
 export default function Gallery() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { token } = useToken(); // Get token from context
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
+
+  const fetchImages = async search => {
+    if (search) {
+      const res = await api(token).get('/search', { params: { query: search } });
+      return res.data.images || [];
+    }
+    const res = await api(token).get('/images');
+    return res.data;
+  };
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['images', search],
     queryFn: () => fetchImages(search),
   });
+
+  const presignUpload = async file => {
+    const res = await api(token).post('/uploads/presign', {
+      filename: file.name,
+      mime: file.type,
+    });
+    return res.data; // adjust fields to backend
+  };
+
+  const ingestImage = async payload => {
+    const res = await api(token).post('/images/ingest', payload);
+    return res.data;
+  };
 
   const uploadMutation = useMutation({
     mutationFn: async files => {
@@ -117,6 +117,18 @@ export default function Gallery() {
           <Button startIcon={<LogoutIcon />} onClick={handleLogout} color="inherit">
             Logout
           </Button>
+          <Button color="inherit" component={RouterLink} to="/">
+            Gallery
+          </Button>
+          <Button color="inherit" component={RouterLink} to="/search">
+            Search
+          </Button>
+          <Button color="inherit" component={RouterLink} to="/duplicates">
+            Duplicates
+          </Button>
+          <Button color="inherit" component={RouterLink} to="/albums">
+            Albums
+          </Button>
         </Toolbar>
       </AppBar>
 
@@ -157,8 +169,13 @@ export default function Gallery() {
                   <CardContent>
                     <Box display="flex" flexWrap="wrap" gap={0.5}>
                       {img.tags?.slice(0, 3).map(tag => (
-                        <Chip key={tag} label={tag} size="small" />
-                      ))}
+                      // Backend returns ImageTag objects, not strings
+                      <Chip 
+                        key={tag.name || tag} 
+                        label={typeof tag === 'string' ? tag : tag.name}
+                        size="small" 
+                      />
+                    ))}
                     </Box>
                     {img.status && (
                       <Typography variant="caption" color="text.secondary">

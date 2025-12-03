@@ -23,12 +23,11 @@ class UserCreate(BaseModel):
     password: str = Field(..., min_length=6)
     full_name: Optional[str] = None
 
+
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
 
-class UserBase(BaseModel):
-    email: EmailStr
 
 class User(BaseModel):
     id: str
@@ -54,6 +53,10 @@ class ImageUpload(BaseModel):
     filename: str
     content_type: str
 
+class PresignRequest(BaseModel):
+    """Schema for requesting a pre-signed URL for file upload."""
+    filename: str
+    content_type: str = Field(..., description="MIME type of the file being uploaded.")
 
 class ImageIngest(BaseModel):
     storage_key: str
@@ -83,7 +86,7 @@ class ImageResponse(BaseModel):
     mime_type: str
     metadata: Optional[ImageMetadata] = None
     phash: Optional[str] = None
-    tags: List[ImageTag] = Field(default_factory=list)
+    tags: List[ImageTag] = []
     status: str  # 'pending', 'processing', 'completed', 'failed'
     created_at: datetime
     processed_at: Optional[datetime] = None

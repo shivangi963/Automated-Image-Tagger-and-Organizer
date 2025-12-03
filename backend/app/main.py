@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
-from app.database import connect_to_mongo, close_mongo_connection
+from app.database import connect_to_mongo, close_mongo_connection, create_indexes
 from app.routers import auth, images, albums, search
 import logging
 
@@ -17,10 +17,10 @@ logger = logging.getLogger(__name__)
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.API_VERSION,
-    description="Automated Image Tagger and Organizer with YOLO, MinIO, and MongoDB"
+    debug=settings.DEBUG
 )
 
-# CORS middleware
+# CORS middleware - use configured origins from settings
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
@@ -29,36 +29,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-# Startup event
-@app.on_event("startup")
-async def startup_event():
-    """Initialize services on startup"""
-    logger.info("Starting application...")
-    await connect_to_mongo()
-    logger.info("Application started successfully")
-
-
-# Shutdown event
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Cleanup on shutdown"""
-    logger.info("Shutting down application...")
-    await close_mongo_connection()
-    logger.info("Application shut down successfully")
-
-
-# Health check endpoint
-@app.get("/")
-async def root():
-    """Health check endpoint"""
-    return {
-        "message": "Image Tagger and Organizer API",
-        "version": settings.API_VERSION,
-        "status": "healthy"
-    }
-
-
 # Include routers
 app.include_router(auth.router)
 app.include_router(images.router)
@@ -66,6 +36,41 @@ app.include_router(albums.router)
 app.include_router(search.router)
 
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+# Startup event
+@app.on_event("startup")
+async def startup():
+    logger.info("=" * 60)
+    logger.info("Starting Automated Image Tagger & Organizer")
+    logger.info("=" * 60)
+    await connect_to_mongo()
+    await create_indexes()
+    logger.info("✓ Application startup complete")
+
+
+# Shutdown event
+@app.on_event("shutdown")
+async def shutdown():
+    logger.info("Shutting down application...")
+    await close_mongo_connection()
+    logger.info("✓ Application shutdown complete")
+
+
+# Health check endpoint
+@app.get("/health")
+async def health_check():
+    """Health check endpoint"""
+    return {
+        "status": "healthy",
+        "app": settings.APP_NAME,
+        "version": settings.API_VERSION,
+    }
+
+
+@app.get("/")
+async def root():
+    """Root endpoint"""
+    return {
+        "message": "Welcome to Automated Image Tagger & Organizer",
+        "version": settings.API_VERSION,
+        "docs": "/docs",
+    }

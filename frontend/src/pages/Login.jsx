@@ -10,11 +10,13 @@ import {
   Link,
   Paper,
 } from '@mui/material';
-import { api, setToken } from '../store/auth.js';
+import { api } from '../store/auth.js';
+import { useToken } from '../hooks/useToken.js';
 import Mascot from '../components/Mascot.jsx';
 
 export default function Login() {
   const navigate = useNavigate();
+  const { setToken } = useToken();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -25,14 +27,23 @@ export default function Login() {
 
   const handleSubmit = async e => {
     e.preventDefault();
+    
+    if (!email.trim() || !password.trim()) {
+      setError('Email and password are required');
+      return;
+    }
+    
     setError(null);
     setLoading(true);
     try {
-      const res = await api().post('/auth/login', { email, password });
-      setToken(res.data.token); // adjust field name if needed
+      const res = await api(null).post('/auth/login', { email, password });
+      setToken(res.data.access_token);  // Use context setToken
       navigate('/');
     } catch (err) {
-      setError(err?.response?.data?.detail || 'Login failed');
+      const errorMsg = Array.isArray(err?.response?.data)
+        ? err.response.data[0]?.msg || 'Login failed'
+        : err?.response?.data?.detail || 'Login failed';
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -68,7 +79,6 @@ export default function Login() {
             value={password}
             onFocus={() => {
               setFocusedField('password');
-              setIsTypingPassword(true);
             }}
             onBlur={() => {
               setFocusedField(null);

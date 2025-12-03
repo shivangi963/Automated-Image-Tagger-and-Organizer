@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from typing import List, Optional
-from app.models import ImageResponse, ImageTag, ImageUpdate
+from app.models import ImageResponse, ImageTag, ImageUpdate, PresignRequest
 from app.auth import get_current_user, get_user_id
 from app.database import get_database
 from app.storage import storage
@@ -260,6 +260,17 @@ async def delete_image(
     await db.image_tags.delete_many({"image_id": ObjectId(image_id)})
     
     return {"message": "Image deleted successfully"}
+
+
+@router.post("/presign")
+async def presign_upload(request: PresignRequest, user_id: str = Depends(get_user_id)):
+    """Generate presigned URL for direct S3/MinIO upload"""
+    key = storage.generate_key(user_id, request.filename)
+    presigned_url = storage.get_presigned_url(key, request.mime)
+    return {
+        "url": presigned_url,
+        "storageKey": key
+    }
 
 
 async def get_image_tags(image_id: str, db) -> List[ImageTag]:

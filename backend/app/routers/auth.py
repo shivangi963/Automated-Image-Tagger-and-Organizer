@@ -55,7 +55,7 @@ async def login(credentials: UserLogin, db=Depends(get_database)):
         )
     
     # Create access token
-    access_token = create_access_token(data={"sub": user["email"]})
+    access_token = create_access_token(data={"sub": str(user["_id"])})
     
     return Token(access_token=access_token)
 
