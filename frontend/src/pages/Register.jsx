@@ -8,10 +8,13 @@ import {
   Alert,
   Link,
   Paper,
+  CircularProgress,
+  Container,
 } from '@mui/material';
-import { api } from '../store/auth.js';
-import { useToken } from '../hooks/useToken.js';
+import { registerUser } from '../api/auth';
+import { useToken } from '../hooks/useToken';
 import Mascot from '../components/Mascot.jsx';
+import getErrorMessage from '../utils/getErrorMessage.js';
 
 export default function Register() {
   const navigate = useNavigate();
@@ -48,36 +51,39 @@ export default function Register() {
     setLoading(true);
 
     try {
-      const res = await api(null).post('/auth/register', {
+      const response = await registerUser({
         full_name: fullName,
         email,
         password,
       });
-      setToken(res.data.access_token);  // Auto-login after registration
-      navigate('/');
+      setToken(response.data.access_token);
+      navigate('/gallery');
     } catch (err) {
-      const errorMsg = Array.isArray(err?.response?.data)
-        ? err.response.data[0]?.msg || 'Registration failed'
-        : err?.response?.data?.detail || 'Registration failed';
-      setError(errorMsg);
+      setError(getErrorMessage(err));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <Box display="flex" justifyContent="center" alignItems="center" minHeight="100vh">
-      <Paper sx={{ p: 4, width: 400 }}>
+    <Container maxWidth="sm">
+      <Box
+        display="flex"
+        flexDirection="column"
+        alignItems="center"
+        minHeight="100vh"
+        sx={{ mt: 8 }}
+      >
         <Mascot focusedField={focusedField} isTypingPassword={isTypingPassword} />
-        <Typography variant="h5" mb={2}>
+        <Typography variant="h4" mb={3}>
           Register
         </Typography>
         {error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
+          <Alert severity="error" sx={{ width: '100%', mb: 2 }}>
             {error}
           </Alert>
         )}
-        <Box component="form" onSubmit={handleSubmit}>
+        <Box component="form" onSubmit={handleSubmit} sx={{ width: '100%' }}>
           <TextField
             label="Full Name"
             fullWidth
@@ -86,6 +92,7 @@ export default function Register() {
             onFocus={() => setFocusedField('name')}
             onBlur={() => setFocusedField(null)}
             onChange={e => setFullName(e.target.value)}
+            required
           />
           <TextField
             label="Email"
@@ -96,6 +103,7 @@ export default function Register() {
             onFocus={() => setFocusedField('email')}
             onBlur={() => setFocusedField(null)}
             onChange={e => setEmail(e.target.value)}
+            required
           />
           <TextField
             label="Password"
@@ -112,6 +120,7 @@ export default function Register() {
               setPassword(e.target.value);
               setIsTypingPassword(true);
             }}
+            required
           />
           <TextField
             label="Confirm Password"
@@ -128,6 +137,7 @@ export default function Register() {
               setConfirm(e.target.value);
               setIsTypingPassword(true);
             }}
+            required
           />
           <Button
             type="submit"
@@ -136,7 +146,7 @@ export default function Register() {
             sx={{ mt: 2 }}
             disabled={loading}
           >
-            {loading ? 'Registering...' : 'Register'}
+            {loading ? <CircularProgress size={24} /> : 'Register'}
           </Button>
         </Box>
         <Typography variant="body2" mt={2}>
@@ -145,7 +155,7 @@ export default function Register() {
             Login
           </Link>
         </Typography>
-      </Paper>
-    </Box>
+      </Box>
+    </Container>
   );
 }

@@ -8,22 +8,25 @@ from app.config import settings
 from app.database import get_database
 from app.models import TokenData
 from bson import ObjectId
+import logging
 
-# Password hashing
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+logger = logging.getLogger(__name__)
+
+# Password hashing - use argon2 (no 72-byte limit, more secure than bcrypt)
+pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
 # JWT bearer token
 security = HTTPBearer()
 
 
+def get_password_hash(password: str) -> str:
+    """Hash password with argon2"""
+    return pwd_context.hash(password)
+
+
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a plain password against hashed password"""
     return pwd_context.verify(plain_password, hashed_password)
-
-
-def get_password_hash(password: str) -> str:
-    """Hash a password"""
-    return pwd_context.hash(password)
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
@@ -44,7 +47,8 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db=Depends(get_database)
-    ):
+):
+    """Get current user from JWT token"""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -64,7 +68,7 @@ async def get_current_user(
         # Validate ObjectId
         try:
             user_obj_id = ObjectId(user_id)
-        except:
+        except Exception:
             raise credentials_exception
 
     except JWTError:
@@ -75,7 +79,6 @@ async def get_current_user(
         raise credentials_exception
 
     return user
-
 
 
 def get_user_id(user: dict) -> str:

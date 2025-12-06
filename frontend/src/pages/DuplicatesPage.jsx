@@ -1,4 +1,5 @@
 import React from 'react';
+import getErrorMessage from '../utils/getErrorMessage.js';
 import { useQuery } from '@tanstack/react-query';
 import {
   Box,
@@ -63,7 +64,7 @@ export default function DuplicatesPage() {
 
         {isError && (
           <Alert severity="error">
-            {error?.response?.data?.detail || 'Failed to load duplicates'}
+              {getErrorMessage(error)}
           </Alert>
         )}
 

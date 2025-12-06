@@ -1,5 +1,5 @@
 import { useContext } from 'react';
-import { TokenContext } from '../store/TokenContext';
+import { TokenContext } from '../store/TokenContext.jsx';
 
 export function useToken() {
   const context = useContext(TokenContext);

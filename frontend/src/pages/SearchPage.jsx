@@ -19,6 +19,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import LogoutIcon from '@mui/icons-material/Logout';
 import { api, setToken } from '../store/auth.js';
+import getErrorMessage from '../utils/getErrorMessage.js';
 
 async function searchImages(query) {
   if (!query.trim()) {
@@ -92,7 +93,7 @@ export default function SearchPage() {
 
         {isError && (
           <Alert severity="error">
-            {error?.response?.data?.detail || 'Search failed'}
+            {getErrorMessage(error)}
           </Alert>
         )}
 

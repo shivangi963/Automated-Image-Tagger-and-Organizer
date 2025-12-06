@@ -22,6 +22,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import LogoutIcon from '@mui/icons-material/Logout';
 import { useNavigate } from 'react-router-dom';
 import { api, setToken } from '../store/auth.js';
+import getErrorMessage from '../utils/getErrorMessage.js';
 
 async function fetchAlbums() {
   const client = api();
@@ -111,7 +112,7 @@ export default function AlbumsPage() {
 
         {isError && (
           <Alert severity="error">
-            {error?.response?.data?.detail || 'Failed to load albums'}
+            {getErrorMessage(error)}
           </Alert>
         )}
 

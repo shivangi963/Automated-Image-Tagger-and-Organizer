@@ -5,6 +5,7 @@ import logging
 from io import BytesIO
 from typing import Optional
 import uuid
+from datetime import timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -73,13 +74,27 @@ class MinIOStorage:
             logger.error(f"Error deleting file: {e}")
             return False
     
+    def get_presigned_put_url(self, key: str, expires: int = 3600) -> Optional[str]:
+        """Generate presigned PUT URL for file upload"""
+        try:
+            url = self.client.get_presigned_url(
+                "PUT",
+                settings.MINIO_BUCKET,
+                key,
+                expires=timedelta(seconds=expires)  # Convert int to timedelta
+            )
+            return url
+        except S3Error as e:
+            logger.error(f"Error generating presigned PUT URL: {e}")
+            return None
+    
     def get_presigned_url(self, key: str, expires: int = 3600) -> Optional[str]:
-        """Generate presigned URL for file access"""
+        """Generate presigned GET URL for file download"""
         try:
             url = self.client.presigned_get_object(
                 settings.MINIO_BUCKET,
                 key,
-                expires=expires
+                expires=timedelta(seconds=expires)  # Convert int to timedelta
             )
             return url
         except S3Error as e:

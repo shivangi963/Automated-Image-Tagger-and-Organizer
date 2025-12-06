@@ -18,6 +18,7 @@ import {
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import LogoutIcon from '@mui/icons-material/Logout';
 import { api, setToken } from '../store/auth.js';
+import getErrorMessage from '../utils/getErrorMessage.js';
 
 async function fetchAlbumDetail(albumId) {
   const client = api();
@@ -73,7 +74,7 @@ export default function AlbumDetailPage() {
 
         {isError && (
           <Alert severity="error">
-            {error?.response?.data?.detail || 'Failed to load album'}
+            {getErrorMessage(error)}
           </Alert>
         )}
 

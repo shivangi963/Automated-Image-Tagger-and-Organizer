@@ -175,3 +175,50 @@ def process_image(self, image_id: str):
             }
         )
         raise
+
+
+async def process_image_sync(image_id: str, db, storage_client):
+    """Process image synchronously (extract metadata, tags, thumbnail)"""
+    try:
+        image = await db.images.find_one({"_id": ObjectId(image_id)})
+        if not image:
+            logger.error(f"Image not found: {image_id}")
+            return
+        
+        logger.info(f"Processing image: {image_id}")
+        
+        # Download image from MinIO
+        file_bytes = storage_client.get_file(image["storage_key"])
+        if not file_bytes:
+            raise Exception("Failed to download image from storage")
+        
+        # Extract metadata (simplified)
+        metadata = {
+            "size": len(file_bytes),
+            "format": image["mime_type"]
+        }
+        
+        # Create thumbnail (simplified - just store original for now)
+        thumbnail_key = image["storage_key"]  # TODO: create actual thumbnail
+        
+        # Update image document
+        await db.images.update_one(
+            {"_id": ObjectId(image_id)},
+            {
+                "$set": {
+                    "status": "completed",
+                    "metadata": metadata,
+                    "thumbnail_key": thumbnail_key,
+                    "processed_at": datetime.utcnow()
+                }
+            }
+        )
+        
+        logger.info(f"Image processed successfully: {image_id}")
+        
+    except Exception as e:
+        logger.exception(f"Error processing image {image_id}: {e}")
+        await db.images.update_one(
+            {"_id": ObjectId(image_id)},
+            {"$set": {"status": "error", "error": str(e)}}
+        )

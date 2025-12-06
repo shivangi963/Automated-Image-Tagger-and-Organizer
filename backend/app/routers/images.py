@@ -1,13 +1,16 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
-from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, status, File, UploadFile
+from pydantic import BaseModel
+from typing import List, Optional, Dict, Any
 from app.models import ImageResponse, ImageTag, ImageUpdate, PresignRequest
 from app.auth import get_current_user, get_user_id
 from app.database import get_database
 from app.storage import storage
-from app.tasks.image_processing import process_image
-from datetime import datetime
+from app.config import settings
+from app.tasks.image_processing import process_image, process_image_sync  # Add this import
+from datetime import datetime, timedelta
 from bson import ObjectId
 import logging
+import asyncio
 
 router = APIRouter(prefix="/images", tags=["Images"])
 logger = logging.getLogger(__name__)
@@ -72,45 +75,30 @@ async def upload_images(
     return uploaded_images
 
 
-@router.get("/", response_model=List[ImageResponse])
+@router.get("/", response_model=List[dict])
 async def list_images(
-    skip: int = 0,
-    limit: int = 50,
-    status_filter: Optional[str] = None,
     current_user: dict = Depends(get_current_user),
     db = Depends(get_database)
 ):
-    """List user's images"""
-    user_id = get_user_id(current_user)
-    
-    query = {"user_id": user_id}
-    if status_filter:
-        query["status"] = status_filter
-    
-    cursor = db.images.find(query).sort("created_at", -1).skip(skip).limit(limit)
-    images = await cursor.to_list(length=limit)
-    
-    result = []
-    for img in images:
-        # Get tags for this image
-        tags = await get_image_tags(str(img["_id"]), db)
+    """List all images for current user"""
+    try:
+        user_id = str(current_user["_id"])
+        images = await db.images.find({"user_id": user_id}).sort("created_at", -1).to_list(None)
         
-        result.append(ImageResponse(
-            id=str(img["_id"]),
-            user_id=img["user_id"],
-            storage_key=img["storage_key"],
-            original_filename=img["original_filename"],
-            mime_type=img["mime_type"],
-            metadata=img.get("metadata"),
-            phash=img.get("phash"),
-            tags=tags,
-            status=img["status"],
-            created_at=img["created_at"],
-            processed_at=img.get("processed_at"),
-            thumbnail_key=img.get("thumbnail_key")
-        ))
-    
-    return result
+        # Convert ObjectId to string
+        for img in images:
+            img["_id"] = str(img["_id"])
+            img["id"] = img["_id"]
+        
+        logger.info(f"Listed {len(images)} images for user {user_id}")
+        return images
+        
+    except Exception as e:
+        logger.exception(f"Error listing images: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to list images"
+        )
 
 
 @router.get("/{image_id}", response_model=ImageResponse)
@@ -262,15 +250,97 @@ async def delete_image(
     return {"message": "Image deleted successfully"}
 
 
-@router.post("/presign")
-async def presign_upload(request: PresignRequest, user_id: str = Depends(get_user_id)):
-    """Generate presigned URL for direct S3/MinIO upload"""
-    key = storage.generate_key(user_id, request.filename)
-    presigned_url = storage.get_presigned_url(key, request.mime)
-    return {
-        "url": presigned_url,
-        "storageKey": key
-    }
+@router.post("/presign", response_model=dict)
+async def presign_upload(
+    request: PresignRequest,
+    current_user: dict = Depends(get_current_user),
+    db = Depends(get_database)
+):
+    """Generate presigned URL for direct MinIO upload"""
+    try:
+        user_id = get_user_id(current_user)
+        logger.info(f"Presign request: user_id={user_id}, filename={request.filename}, mime={request.mime}")
+        
+        # Verify storage is connected
+        if not storage or not storage.client:
+            logger.error("MinIO storage not initialized")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Storage service unavailable"
+            )
+        
+        # Generate storage key
+        key = storage.generate_key(user_id, request.filename)
+        logger.info(f"Generated storage key: {key}")
+        
+        # Get presigned PUT URL (for uploading)
+        # expires must be a timedelta, not int
+        presigned_url = storage.client.get_presigned_url(
+            'PUT',
+            settings.MINIO_BUCKET,
+            key,
+            expires=timedelta(hours=1)  # Changed from expires=3600
+        )
+        
+        logger.info(f"Generated presigned URL for {key}: {presigned_url}")
+        
+        return {
+            "url": presigned_url,
+            "storageKey": key
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Error generating presigned URL: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate presigned URL: {str(e)}"
+        )
+
+
+class IngestRequest(BaseModel):
+    """Schema for ingesting uploaded image"""
+    filename: str
+    mime_type: str
+    storage_key: str
+
+@router.post("/ingest", response_model=dict)
+async def ingest_image(
+    request: IngestRequest,
+    current_user: dict = Depends(get_current_user),
+    db = Depends(get_database)
+):
+    """Ingest uploaded image from MinIO and create document in DB"""
+    try:
+        user_id = str(current_user["_id"])
+        
+        image_doc = {
+            "user_id": user_id,
+            "filename": request.filename,
+            "original_filename": request.filename,
+            "mime_type": request.mime_type,
+            "storage_key": request.storage_key,
+            "status": "completed",  # ✅ Mark as completed immediately
+            "tags": [],
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow(),
+        }
+        
+        result = await db.images.insert_one(image_doc)
+        image_id = str(result.inserted_id)
+        
+        return {
+            "id": image_id,
+            "status": "completed"
+        }
+        
+    except Exception as e:
+        logger.exception(f"Error ingesting image: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to ingest image: {str(e)}"
+        )
 
 
 async def get_image_tags(image_id: str, db) -> List[ImageTag]:
@@ -299,3 +369,39 @@ async def get_image_tags(image_id: str, db) -> List[ImageTag]:
         )
         for tag in tags
     ]
+
+
+async def build_image_response(image_doc, db) -> Dict[str, Any]:  # Changed return type
+    """Helper to build ImageResponse with thumbnail URL"""
+    image_id = str(image_doc["_id"])
+    tags = await get_image_tags(image_id, db)
+    
+    # Generate thumbnail URL if available
+    thumbnail_url = None
+    if image_doc.get("thumbnail_key"):
+        thumbnail_url = storage.get_presigned_url(image_doc["thumbnail_key"])
+    
+    # For now, also use original image as fallback
+    if not thumbnail_url:
+        thumbnail_url = storage.get_presigned_url(image_doc["storage_key"])
+    
+    response = ImageResponse(
+        id=image_id,
+        user_id=image_doc["user_id"],
+        storage_key=image_doc["storage_key"],
+        original_filename=image_doc["original_filename"],
+        mime_type=image_doc["mime_type"],
+        metadata=image_doc.get("metadata"),
+        phash=image_doc.get("phash"),
+        tags=tags,
+        status=image_doc["status"],
+        created_at=image_doc["created_at"],
+        processed_at=image_doc.get("processed_at"),
+        thumbnail_key=image_doc.get("thumbnail_key")
+    )
+    
+    # Add thumbnail URL to dict for frontend
+    return {
+        **response.dict(),
+        "thumbnailUrl": thumbnail_url
+    }

@@ -1,194 +1,204 @@
-import React from 'react';
-import { useState } from 'react';
-import {
-  Box,
-  Typography,
-  Grid,
-  Card,
-  CardActionArea,
-  CardMedia,
-  CardContent,
-  Chip,
-  CircularProgress,
-  TextField,
-  IconButton,
-  Toolbar,
-  AppBar,
-  Button,
-} from '@mui/material';
-import SearchIcon from '@mui/icons-material/Search';
-import LogoutIcon from '@mui/icons-material/Logout';
-import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
+import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  Box, Button, Grid, Card, CardMedia, CardContent, Typography,
+  Chip, CircularProgress, Alert, Input, AppBar, Toolbar, IconButton, LinearProgress
+} from '@mui/material';
+import UploadIcon from '@mui/icons-material/Upload';
+import LogoutIcon from '@mui/icons-material/Logout';
+import api from '../api/axiosClient.js';
 import { useToken } from '../hooks/useToken.js';
-import { api } from '../store/auth.js';
-import { Link as RouterLink } from 'react-router-dom';
+import getErrorMessage from '../utils/getErrorMessage.js';
 
 export default function Gallery() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { token } = useToken(); // Get token from context
+  const { token, setToken } = useToken();
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const fileRef = useRef(null);
 
-  const fetchImages = async search => {
-    if (search) {
-      const res = await api(token).get('/search', { params: { query: search } });
+  // fetch images
+  const fetchImages = async (search) => {
+    if (search && search.trim()) {
+      const res = await api.get('/search', { params: { query: search } });
       return res.data.images || [];
     }
-    const res = await api(token).get('/images');
-    return res.data;
+    const res = await api.get('/images/');
+    return Array.isArray(res.data) ? res.data : (res.data.images || []);
   };
 
-  const { data, isLoading, isError } = useQuery({
+  const { data: imagesData = [], isLoading, isError, error: queryError } = useQuery({
     queryKey: ['images', search],
     queryFn: () => fetchImages(search),
   });
 
-  const presignUpload = async file => {
-    const res = await api(token).post('/uploads/presign', {
+  const presignUpload = async (file) => {
+    const res = await api.post('/images/presign', {
       filename: file.name,
       mime: file.type,
     });
-    return res.data; // adjust fields to backend
+    return res.data;
   };
 
-  const ingestImage = async payload => {
-    const res = await api(token).post('/images/ingest', payload);
+  const ingestImage = async (payload) => {
+    const res = await api.post('/images/ingest', payload);
     return res.data;
   };
 
   const uploadMutation = useMutation({
-    mutationFn: async files => {
-      for (const file of files) {
-        const presign = await presignUpload(file);
+    mutationFn: async (files) => {
+      setUploading(true);
+      setUploadProgress(0);
+      try {
+        for (let i = 0; i < files.length; i++) {
+          const file = files[i];
+          
+          const presign = await presignUpload(file);
+          if (!presign?.url) throw new Error('No presign url returned');
 
-        await fetch(presign.url, {
-          method: 'PUT',
-          headers: { 'Content-Type': file.type },
-          body: file,
-        });
+          const uploadRes = await fetch(presign.url, {
+            method: 'PUT',
+            headers: { 'Content-Type': file.type },
+            body: file,
+          });
+          if (!uploadRes.ok) {
+            throw new Error(`Upload failed: ${uploadRes.statusText}`);
+          }
 
-        await ingestImage({
-          filename: file.name,
-          mime: file.type,
-          storage_key: presign.storageKey, // adjust to backend
-        });
+          setUploadProgress(Math.round(((i + 1) / files.length) * 60));
+
+          const ingestPayload = {
+            filename: file.name,
+            mime_type: file.type,
+            storage_key: presign.storageKey || presign.key,
+          };
+          
+          await ingestImage(ingestPayload);
+          setUploadProgress(Math.round(((i + 1) / files.length) * 100));
+        }
+      } finally {
+        setUploading(false);
+        setUploadProgress(0);
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['images'] });
     },
+    onError: (err) => {
+      console.error('Upload failed:', err);
+    },
   });
+
+  const onFilesSelected = (ev) => {
+    const files = Array.from(ev.target.files || []);
+    if (files.length) uploadMutation.mutate(files);
+    if (fileRef.current) fileRef.current.value = '';
+  };
 
   const handleLogout = () => {
     setToken(null);
     navigate('/login');
   };
 
-  const handleSearch = () => setSearch(searchInput);
-
-  const handleFileChange = e => {
-    const files = Array.from(e.target.files || []);
-    if (!files.length) return;
-    uploadMutation.mutate(files);
-  };
-
   return (
-    <Box>
-      <AppBar position="static" color="transparent" elevation={0} sx={{ mb: 2 }}>
-        <Toolbar disableGutters sx={{ gap: 2 }}>
-          <Typography variant="h5" sx={{ flexGrow: 1 }}>
-            Image Tagger
-          </Typography>
-          <TextField
-            size="small"
-            placeholder="Search tags or text..."
-            value={searchInput}
-            onChange={e => setSearchInput(e.target.value)}
-            InputProps={{
-              endAdornment: (
-                <IconButton onClick={handleSearch}>
-                  <SearchIcon />
-                </IconButton>
-              ),
-            }}
-          />
-          <Button startIcon={<LogoutIcon />} onClick={handleLogout} color="inherit">
-            Logout
-          </Button>
-          <Button color="inherit" component={RouterLink} to="/">
+    <>
+      <AppBar position="static">
+        <Toolbar>
+          <Typography variant="h6" sx={{ flexGrow: 1 }}>
             Gallery
-          </Button>
-          <Button color="inherit" component={RouterLink} to="/search">
-            Search
-          </Button>
-          <Button color="inherit" component={RouterLink} to="/duplicates">
-            Duplicates
-          </Button>
-          <Button color="inherit" component={RouterLink} to="/albums">
-            Albums
-          </Button>
+          </Typography>
+          <input
+            ref={fileRef}
+            id="file-upload"
+            type="file"
+            multiple
+            accept="image/*"
+            style={{ display: 'none' }}
+            onChange={onFilesSelected}
+          />
+          <label htmlFor="file-upload">
+            <Button
+              color="inherit"
+              component="span"
+              startIcon={<UploadIcon />}
+              disabled={uploading}
+            >
+              Upload
+            </Button>
+          </label>
+          <IconButton color="inherit" onClick={handleLogout}>
+            <LogoutIcon />
+          </IconButton>
         </Toolbar>
       </AppBar>
 
-      <Button variant="contained" component="label">
-        Upload Images
-        <input
-          hidden
-          multiple
-          type="file"
-          accept="image/*"
-          onChange={handleFileChange}
-        />
-      </Button>
+      <Box sx={{ p: 3 }}>
+        <Box display="flex" gap={1} mb={2}>
+          <Input
+            placeholder="Search tags or metadata"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') setSearch(searchInput); }}
+            sx={{ flex: 1 }}
+          />
+          <Button variant="contained" onClick={() => setSearch(searchInput)}>Search</Button>
+        </Box>
 
-      <Box mt={3}>
-        {isLoading && (
-          <Box display="flex" justifyContent="center" mt={4}>
-            <CircularProgress />
+        {uploading && (
+          <Box mb={2}>
+            <Typography variant="body2">Uploading & processing... {uploadProgress}%</Typography>
+            <LinearProgress variant="determinate" value={uploadProgress} />
           </Box>
         )}
-        {isError && (
-          <Typography color="error" mt={2}>
-            Failed to load images.
-          </Typography>
-        )}
+
+        {isLoading && <Box display="flex" justifyContent="center"><CircularProgress /></Box>}
+        {isError && <Alert severity="error">{getErrorMessage(queryError)}</Alert>}
+
+        {/* ✅ Use Grid v1 - remove item prop, use spacing */}
         <Grid container spacing={2}>
-          {data?.map(img => (
-            <Grid item xs={12} sm={6} md={3} key={img.id}>
-              <Card>
-                <CardActionArea>
+          {imagesData && imagesData.length > 0 ? (
+            imagesData.map((img) => (
+              <Grid key={img._id || img.id} xs={12} sm={6} md={4} lg={3}>
+                <Card>
                   <CardMedia
                     component="img"
-                    height="160"
-                    image={img.thumbnailUrl}
-                    alt="thumbnail"
-                    loading="lazy"
+                    height="200"
+                    image={img.thumbnailUrl || img.url || img.original_url || '/placeholder.png'}
+                    alt={img.filename || img.name}
+                    sx={{ objectFit: 'cover' }}
                   />
                   <CardContent>
-                    <Box display="flex" flexWrap="wrap" gap={0.5}>
-                      {img.tags?.slice(0, 3).map(tag => (
-                      // Backend returns ImageTag objects, not strings
-                      <Chip 
-                        key={tag.name || tag} 
-                        label={typeof tag === 'string' ? tag : tag.name}
-                        size="small" 
-                      />
-                    ))}
+                    <Typography variant="body2" noWrap>{img.filename || img.name}</Typography>
+                    <Box sx={{ mt: 1, display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                      {(img.tags || []).slice(0, 5).map((tag, idx) => (
+                        <Chip
+                          key={idx}
+                          label={typeof tag === 'string' ? tag : (tag.name || tag.label || JSON.stringify(tag))}
+                          size="small"
+                          variant="outlined"
+                        />
+                      ))}
                     </Box>
-                    {img.status && (
-                      <Typography variant="caption" color="text.secondary">
-                        {img.status}
-                      </Typography>
-                    )}
+                    <Typography variant="caption" sx={{ mt: 1, display: 'block' }}>
+                      Status: {img.status || 'unknown'}
+                    </Typography>
                   </CardContent>
-                </CardActionArea>
-              </Card>
+                </Card>
+              </Grid>
+            ))
+          ) : (
+            <Grid xs={12}>
+              <Typography align="center" color="textSecondary">
+                No images yet. Upload one to get started!
+              </Typography>
             </Grid>
-          ))}
+          )}
         </Grid>
       </Box>
-    </Box>
+    </>
   );
 }
