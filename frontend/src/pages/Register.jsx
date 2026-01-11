@@ -1,20 +1,17 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import {
-  Box,
-  Button,
-  TextField,
-  Typography,
-  Alert,
-  Link,
-  Paper,
-  CircularProgress,
-  Container,
+  Box, Button, TextField, Typography, Alert, Link, Paper, CircularProgress,
+  Container, InputAdornment, IconButton, LinearProgress
 } from '@mui/material';
 import { registerUser } from '../api/auth';
 import { useToken } from '../hooks/useToken';
-import Mascot from '../components/Mascot.jsx';
-import getErrorMessage from '../utils/getErrorMessage.js';
+import getErrorMessage from '../utils/getErrorMessage';
+import Visibility from '@mui/icons-material/Visibility';
+import VisibilityOff from '@mui/icons-material/VisibilityOff';
+import ImageIcon from '@mui/icons-material/Image';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import CancelIcon from '@mui/icons-material/Cancel';
 
 export default function Register() {
   const navigate = useNavigate();
@@ -23,13 +20,25 @@ export default function Register() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const [focusedField, setFocusedField] = useState(null);
-  const [isTypingPassword, setIsTypingPassword] = useState(false);
+  const getPasswordStrength = () => {
+    if (!password) return 0;
+    let strength = 0;
+    if (password.length >= 6) strength += 25;
+    if (password.length >= 10) strength += 25;
+    if (/[a-z]/.test(password) && /[A-Z]/.test(password)) strength += 25;
+    if (/\d/.test(password)) strength += 25;
+    return strength;
+  };
 
-  const handleSubmit = async e => {
+  const passwordStrength = getPasswordStrength();
+  const passwordsMatch = password && confirm && password === confirm;
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
     if (!fullName.trim() || !email.trim() || !password.trim()) {
@@ -56,7 +65,12 @@ export default function Register() {
         email,
         password,
       });
-      setToken(response.data.access_token);
+      
+      const token = response?.data?.access_token;
+      if (!token) throw new Error('No token received');
+      
+      localStorage.setItem('jwt', token);
+      setToken(token);
       navigate('/gallery');
     } catch (err) {
       setError(getErrorMessage(err));
@@ -66,96 +80,224 @@ export default function Register() {
   };
 
   return (
-    <Container maxWidth="sm">
-      <Box
-        display="flex"
-        flexDirection="column"
-        alignItems="center"
-        minHeight="100vh"
-        sx={{ mt: 8 }}
-      >
-        <Mascot focusedField={focusedField} isTypingPassword={isTypingPassword} />
-        <Typography variant="h4" mb={3}>
-          Register
-        </Typography>
-        {error && (
-          <Alert severity="error" sx={{ width: '100%', mb: 2 }}>
-            {error}
-          </Alert>
-        )}
-        <Box component="form" onSubmit={handleSubmit} sx={{ width: '100%' }}>
-          <TextField
-            label="Full Name"
-            fullWidth
-            margin="normal"
-            value={fullName}
-            onFocus={() => setFocusedField('name')}
-            onBlur={() => setFocusedField(null)}
-            onChange={e => setFullName(e.target.value)}
-            required
-          />
-          <TextField
-            label="Email"
-            fullWidth
-            margin="normal"
-            type="email"
-            value={email}
-            onFocus={() => setFocusedField('email')}
-            onBlur={() => setFocusedField(null)}
-            onChange={e => setEmail(e.target.value)}
-            required
-          />
-          <TextField
-            label="Password"
-            type="password"
-            fullWidth
-            margin="normal"
-            value={password}
-            onFocus={() => setFocusedField('password')}
-            onBlur={() => {
-              setFocusedField(null);
-              setIsTypingPassword(false);
-            }}
-            onChange={e => {
-              setPassword(e.target.value);
-              setIsTypingPassword(true);
-            }}
-            required
-          />
-          <TextField
-            label="Confirm Password"
-            type="password"
-            fullWidth
-            margin="normal"
-            value={confirm}
-            onFocus={() => setFocusedField('confirm')}
-            onBlur={() => {
-              setFocusedField(null);
-              setIsTypingPassword(false);
-            }}
-            onChange={e => {
-              setConfirm(e.target.value);
-              setIsTypingPassword(true);
-            }}
-            required
-          />
-          <Button
-            type="submit"
-            variant="contained"
-            fullWidth
-            sx={{ mt: 2 }}
-            disabled={loading}
-          >
-            {loading ? <CircularProgress size={24} /> : 'Register'}
-          </Button>
-        </Box>
-        <Typography variant="body2" mt={2}>
-          Already have an account?{' '}
-          <Link component={RouterLink} to="/login">
-            Login
-          </Link>
-        </Typography>
-      </Box>
-    </Container>
+    <Box
+      sx={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'linear-gradient(135deg, #1976d2 0%, #42a5f5 100%)',
+        py: 4
+      }}
+    >
+      <Container maxWidth="sm">
+        <Paper
+          elevation={24}
+          sx={{
+            p: 4,
+            borderRadius: 3,
+            backdropFilter: 'blur(10px)',
+            bgcolor: 'rgba(255, 255, 255, 0.98)'
+          }}
+        >
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            {/* Logo/Icon */}
+            <Box
+              sx={{
+                width: 80,
+                height: 80,
+                borderRadius: '50%',
+                bgcolor: 'primary.main',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: 4,
+                mb: 2
+              }}
+            >
+              <ImageIcon sx={{ fontSize: 48, color: 'white' }} />
+            </Box>
+
+            <Typography 
+              variant="h4" 
+              align="center" 
+              gutterBottom 
+              sx={{ fontWeight: 700, color: 'primary.main' }}
+            >
+              Create Account
+            </Typography>
+            
+            <Typography 
+              variant="body1" 
+              align="center" 
+              color="textSecondary" 
+              sx={{ mb: 3 }}
+            >
+              Join Smart Gallery today
+            </Typography>
+
+            {error && (
+              <Alert severity="error" sx={{ mb: 3, borderRadius: 2, width: '100%' }}>
+                {error}
+              </Alert>
+            )}
+
+            <Box component="form" onSubmit={handleSubmit} sx={{ width: '100%' }}>
+              <TextField
+                label="Full Name"
+                fullWidth
+                margin="normal"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                required
+                autoFocus
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
+              />
+
+              <TextField
+                label="Email Address"
+                fullWidth
+                margin="normal"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                autoComplete="email"
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
+              />
+
+              <TextField
+                label="Password"
+                type={showPassword ? 'text' : 'password'}
+                fullWidth
+                margin="normal"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                autoComplete="new-password"
+                InputProps={{
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton
+                        onClick={() => setShowPassword(!showPassword)}
+                        edge="end"
+                      >
+                        {showPassword ? <VisibilityOff /> : <Visibility />}
+                      </IconButton>
+                    </InputAdornment>
+                  )
+                }}
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
+              />
+
+              {password && (
+                <Box sx={{ mt: 1, mb: 2 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                    <Typography variant="caption" color="textSecondary">
+                      Password Strength
+                    </Typography>
+                    <Typography variant="caption" color={
+                      passwordStrength < 50 ? 'error.main' :
+                      passwordStrength < 75 ? 'warning.main' : 'success.main'
+                    }>
+                      {passwordStrength < 50 ? 'Weak' :
+                       passwordStrength < 75 ? 'Medium' : 'Strong'}
+                    </Typography>
+                  </Box>
+                  <LinearProgress
+                    variant="determinate"
+                    value={passwordStrength}
+                    sx={{
+                      height: 6,
+                      borderRadius: 3,
+                      bgcolor: 'grey.200',
+                      '& .MuiLinearProgress-bar': {
+                        bgcolor: passwordStrength < 50 ? 'error.main' :
+                                 passwordStrength < 75 ? 'warning.main' : 'success.main'
+                      }
+                    }}
+                  />
+                </Box>
+              )}
+
+              <TextField
+                label="Confirm Password"
+                type={showConfirm ? 'text' : 'password'}
+                fullWidth
+                margin="normal"
+                value={confirm}
+                onChange={(e) => setConfirm(e.target.value)}
+                required
+                autoComplete="new-password"
+                InputProps={{
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      {confirm && (
+                        passwordsMatch ? 
+                          <CheckCircleIcon color="success" sx={{ mr: 1 }} /> :
+                          <CancelIcon color="error" sx={{ mr: 1 }} />
+                      )}
+                      <IconButton
+                        onClick={() => setShowConfirm(!showConfirm)}
+                        edge="end"
+                      >
+                        {showConfirm ? <VisibilityOff /> : <Visibility />}
+                      </IconButton>
+                    </InputAdornment>
+                  )
+                }}
+                error={confirm && !passwordsMatch}
+                helperText={confirm && !passwordsMatch ? 'Passwords do not match' : ''}
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
+              />
+
+              <Button
+                type="submit"
+                variant="contained"
+                fullWidth
+                size="large"
+                disabled={loading}
+                sx={{ 
+                  mt: 3, 
+                  mb: 2,
+                  py: 1.5,
+                  borderRadius: 2,
+                  textTransform: 'none',
+                  fontSize: '1.1rem',
+                  fontWeight: 600,
+                  boxShadow: 4,
+                  '&:hover': {
+                    boxShadow: 8
+                  }
+                }}
+              >
+                {loading ? (
+                  <CircularProgress size={24} color="inherit" />
+                ) : (
+                  'Create Account'
+                )}
+              </Button>
+
+              <Box sx={{ textAlign: 'center', mt: 2 }}>
+                <Typography variant="body2" color="textSecondary">
+                  Already have an account?{' '}
+                  <Link
+                    component={RouterLink}
+                    to="/login"
+                    sx={{
+                      fontWeight: 600,
+                      textDecoration: 'none',
+                      '&:hover': { textDecoration: 'underline' }
+                    }}
+                  >
+                    Sign In
+                  </Link>
+                </Typography>
+              </Box>
+            </Box>
+          </Box>
+        </Paper>
+      </Container>
+    </Box>
   );
 }

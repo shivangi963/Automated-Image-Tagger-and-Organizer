@@ -1,15 +1,18 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { Container, CircularProgress, Box } from '@mui/material';
+import { CircularProgress, Box } from '@mui/material';
 import { useToken } from './hooks/useToken.js';
 import Login from './pages/Login.jsx';
 import Register from './pages/Register.jsx';
 import Gallery from './pages/Gallery.jsx';
+import Albums from './pages/Albums.jsx';
+import AlbumDetail from './pages/AlbumDetail.jsx';
+import Search from './pages/Search.jsx';
+import Duplicates from './pages/Duplicates.jsx';
 
 function ProtectedRoute({ children }) {
   const { token, isLoading } = useToken();
 
-  // Show loading spinner while checking token
   if (isLoading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="100vh">
@@ -18,7 +21,6 @@ function ProtectedRoute({ children }) {
     );
   }
 
-  // ✅ FIXED: Redirect to login if NO token
   if (!token) {
     return <Navigate to="/login" replace />;
   }
@@ -38,33 +40,63 @@ export default function App() {
   }
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Routes>
-        {/* Public routes */}
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
+    <Routes>
+      {/* Public routes */}
+      <Route path="/login" element={<Login />} />
+      <Route path="/register" element={<Register />} />
 
-        {/* Protected routes */}
-        <Route
-          path="/"
-          element={
-            <ProtectedRoute>
-              <Navigate to="/gallery" replace />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/gallery"
-          element={
-            <ProtectedRoute>
-              <Gallery />
-            </ProtectedRoute>
-          }
-        />
+      {/* Protected routes */}
+      <Route
+        path="/"
+        element={
+          <ProtectedRoute>
+            <Navigate to="/gallery" replace />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/gallery"
+        element={
+          <ProtectedRoute>
+            <Gallery />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/albums"
+        element={
+          <ProtectedRoute>
+            <Albums />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/albums/:albumId"
+        element={
+          <ProtectedRoute>
+            <AlbumDetail />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/search"
+        element={
+          <ProtectedRoute>
+            <Search />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/duplicates"
+        element={
+          <ProtectedRoute>
+            <Duplicates />
+          </ProtectedRoute>
+        }
+      />
 
-        {/* 404 */}
-        <Route path="*" element={<div>Page not found</div>} />
-      </Routes>
-    </Container>
+      {/* 404 */}
+      <Route path="*" element={<Navigate to="/gallery" replace />} />
+    </Routes>
   );
 }
