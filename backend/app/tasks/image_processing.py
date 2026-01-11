@@ -1,3 +1,4 @@
+
 from celery_worker import celery_app
 from app.storage import storage
 from app.ml.yolo_detector import detector
@@ -97,49 +98,31 @@ def process_image(self, image_id: str):
             detections = detector.detect_objects(tmp_path)
             unique_labels = detector.extract_unique_labels(detections)
             
-            # Save tags to database
+            # FIXED: Store tags directly in the image document
             tag_docs = []
+            tag_strings = []  # For text search
+            
             for label_info in unique_labels:
                 label = label_info['label']
                 confidence = label_info['confidence']
-                
-                # Find or create tag
-                tag = db.tags.find_one({"name": label})
-                if not tag:
-                    tag_result = db.tags.insert_one({
-                        "name": label,
-                        "source": "yolo",
-                        "created_at": datetime.utcnow()
-                    })
-                    tag_id = tag_result.inserted_id
-                else:
-                    tag_id = tag["_id"]
-                
-                # Create image-tag association
-                db.image_tags.update_one(
-                    {"image_id": ObjectId(image_id), "tag_id": tag_id},
-                    {
-                        "$set": {
-                            "confidence": confidence,
-                            "source": "yolo",
-                            "created_at": datetime.utcnow()
-                        }
-                    },
-                    upsert=True
-                )
                 
                 tag_docs.append({
                     "tag_name": label,
                     "confidence": confidence,
                     "source": "yolo"
                 })
+                
+                # Add to searchable strings
+                tag_strings.append(label.lower())
+            
+            logger.info(f"Detected {len(tag_docs)} tags: {tag_strings}")
             
         finally:
             # Clean up temp file
             if os.path.exists(tmp_path):
                 os.remove(tmp_path)
         
-        # Update image document
+        # Update image document with tags stored inline
         db.images.update_one(
             {"_id": ObjectId(image_id)},
             {
@@ -147,13 +130,15 @@ def process_image(self, image_id: str):
                     "metadata": metadata,
                     "phash": phash,
                     "thumbnail_key": thumb_key,
+                    "tags": tag_docs,  # Store tags directly
+                    "tag_strings": tag_strings,  # For text search
                     "status": "completed",
                     "processed_at": datetime.utcnow()
                 }
             }
         )
         
-        logger.info(f"Successfully processed image {image_id}")
+        logger.info(f"Successfully processed image {image_id} with {len(tag_docs)} tags")
         return {
             "status": "success",
             "image_id": image_id,

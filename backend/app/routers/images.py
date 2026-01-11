@@ -85,10 +85,18 @@ async def list_images(
         user_id = str(current_user["_id"])
         images = await db.images.find({"user_id": user_id}).sort("created_at", -1).to_list(None)
         
-        # Convert ObjectId to string
+        # Convert ObjectId to string and ensure tags are included
         for img in images:
             img["_id"] = str(img["_id"])
             img["id"] = img["_id"]
+            
+            # Ensure tags field exists (might be missing for old images)
+            if "tags" not in img:
+                img["tags"] = []
+            
+            # Ensure tag_strings exists for search
+            if "tag_strings" not in img:
+                img["tag_strings"] = [tag.get("tag_name", "").lower() for tag in img.get("tags", [])]
         
         logger.info(f"Listed {len(images)} images for user {user_id}")
         return images
@@ -321,8 +329,9 @@ async def ingest_image(
             "original_filename": request.filename,
             "mime_type": request.mime_type,
             "storage_key": request.storage_key,
-            "status": "completed",  # ✅ Mark as completed immediately
+            "status": "pending",  # ✅ Set to pending so Celery will process
             "tags": [],
+            "tag_strings": [],
             "created_at": datetime.utcnow(),
             "updated_at": datetime.utcnow(),
         }
@@ -330,9 +339,19 @@ async def ingest_image(
         result = await db.images.insert_one(image_doc)
         image_id = str(result.inserted_id)
         
+        # ✅ CRITICAL: Trigger Celery task to process the image
+        try:
+            from app.tasks.image_processing import process_image
+            task = process_image.delay(image_id)
+            logger.info(f"Celery task {task.id} started for image {image_id}")
+        except Exception as e:
+            logger.error(f"Failed to start Celery task: {e}")
+            # Even if Celery fails, return success - image is in DB
+        
         return {
             "id": image_id,
-            "status": "completed"
+            "status": "pending",
+            "message": "Image uploaded, processing started"
         }
         
     except Exception as e:

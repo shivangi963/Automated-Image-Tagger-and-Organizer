@@ -18,6 +18,7 @@ celery_app.conf.update(
     task_track_started=True,
     task_time_limit=300,  # 5 minutes
     worker_prefetch_multiplier=1,
+    imports=('app.tasks.image_processing',)
 )
 
 if __name__ == '__main__':

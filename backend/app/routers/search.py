@@ -6,7 +6,9 @@ from app.database import get_database
 from app.ml.phash import hamming_distance, similarity_score
 from bson import ObjectId
 from datetime import datetime
+import logging
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/search", tags=["Search"])
 
 
@@ -24,7 +26,7 @@ async def search_images(
     """Search images by keywords and filters"""
     user_id = get_user_id(current_user)
     
-    # Build search pipeline
+    # Build search filter
     match_stage = {"user_id": user_id, "status": "completed"}
     
     # Date range filter
@@ -35,42 +37,21 @@ async def search_images(
         if date_to:
             match_stage["created_at"]["$lte"] = date_to
     
-    # Tag filter
-    image_ids = None
-    if tags or query:
-        tag_list = []
-        if tags:
-            tag_list.extend([t.strip().lower() for t in tags.split(",")])
-        if query:
-            # Text search on tags
-            tag_cursor = db.tags.find(
-                {"$text": {"$search": query}},
-                {"score": {"$meta": "textScore"}}
-            ).sort([("score", {"$meta": "textScore"})])
-            
-            found_tags = await tag_cursor.to_list(length=20)
-            tag_list.extend([str(t["_id"]) for t in found_tags])
+    # FIXED: Text search on tag_strings
+    if query or tags:
+        search_terms = []
         
-        if tag_list:
-            # Find images with these tags
-            tag_ids = []
-            for tag_name in tag_list:
-                if ObjectId.is_valid(tag_name):
-                    tag_ids.append(ObjectId(tag_name))
-                else:
-                    tag_doc = await db.tags.find_one({"name": tag_name})
-                    if tag_doc:
-                        tag_ids.append(tag_doc["_id"])
-            
-            if tag_ids:
-                image_tag_docs = await db.image_tags.find(
-                    {"tag_id": {"$in": tag_ids}}
-                ).distinct("image_id")
-                
-                image_ids = image_tag_docs
+        if query:
+            # Use MongoDB text search
+            match_stage["$text"] = {"$search": query.strip()}
+        
+        if tags:
+            # Split tags and search in tag_strings array
+            tag_list = [t.strip().lower() for t in tags.split(",") if t.strip()]
+            if tag_list:
+                match_stage["tag_strings"] = {"$in": tag_list}
     
-    if image_ids is not None:
-        match_stage["_id"] = {"$in": image_ids}
+    logger.info(f"Search query: {match_stage}")
     
     # Get total count
     total = await db.images.count_documents(match_stage)
@@ -82,7 +63,8 @@ async def search_images(
     # Build response
     result_images = []
     for img in images:
-        tags = await get_image_tags_helper(str(img["_id"]), db)
+        # Tags are now stored directly in the image document
+        tags_list = img.get("tags", [])
         
         result_images.append(ImageResponse(
             id=str(img["_id"]),
@@ -92,19 +74,20 @@ async def search_images(
             mime_type=img["mime_type"],
             metadata=img.get("metadata"),
             phash=img.get("phash"),
-            tags=tags,
+            tags=tags_list,  # Tags already in correct format
             status=img["status"],
             created_at=img["created_at"],
             processed_at=img.get("processed_at"),
-            thumbnail_key=img.get("thumbnail_key")
+            thumbnailUrl=None  # Will be added by frontend
         ))
     
+    logger.info(f"Search returned {len(result_images)} results out of {total} total")
     return SearchResponse(total=total, images=result_images)
 
 
 @router.get("/duplicates", response_model=List[DuplicateGroup])
 async def find_duplicates(
-    threshold: int = 8,
+    threshold: int = 10,  # FIXED: Increased threshold for better detection
     current_user: dict = Depends(get_current_user),
     db = Depends(get_database)
 ):
@@ -118,40 +101,54 @@ async def find_duplicates(
     })
     images = await cursor.to_list(length=1000)
     
+    logger.info(f"Checking {len(images)} images for duplicates with threshold {threshold}")
+    
     # Find duplicates
     duplicate_groups = []
     processed = set()
     
     for i, img1 in enumerate(images):
-        if img1["_id"] in processed:
+        img1_id = str(img1["_id"])
+        if img1_id in processed:
             continue
         
         group = [img1]
         
         for img2 in images[i+1:]:
-            if img2["_id"] in processed:
+            img2_id = str(img2["_id"])
+            if img2_id in processed:
                 continue
             
-            distance = hamming_distance(img1["phash"], img2["phash"])
-            
-            if distance <= threshold:
-                group.append(img2)
-                processed.add(img2["_id"])
+            try:
+                distance = hamming_distance(img1["phash"], img2["phash"])
+                logger.debug(f"Distance between {img1['original_filename']} and {img2['original_filename']}: {distance}")
+                
+                if distance <= threshold:
+                    group.append(img2)
+                    processed.add(img2_id)
+            except Exception as e:
+                logger.error(f"Error comparing hashes: {e}")
+                continue
         
         if len(group) > 1:
             # Calculate average similarity
             similarities = []
             for j in range(len(group)):
                 for k in range(j+1, len(group)):
-                    sim = similarity_score(group[j]["phash"], group[k]["phash"])
-                    similarities.append(sim)
+                    try:
+                        sim = similarity_score(group[j]["phash"], group[k]["phash"])
+                        similarities.append(sim)
+                    except Exception as e:
+                        logger.error(f"Error calculating similarity: {e}")
             
             avg_similarity = sum(similarities) / len(similarities) if similarities else 0
             
             # Convert to ImageResponse
             image_responses = []
             for img in group:
-                tags = await get_image_tags_helper(str(img["_id"]), db)
+                # Get tags from image document
+                tags_list = img.get("tags", [])
+                
                 image_responses.append(ImageResponse(
                     id=str(img["_id"]),
                     user_id=img["user_id"],
@@ -160,44 +157,19 @@ async def find_duplicates(
                     mime_type=img["mime_type"],
                     metadata=img.get("metadata"),
                     phash=img.get("phash"),
-                    tags=tags,
+                    tags=tags_list,
                     status=img["status"],
                     created_at=img["created_at"],
                     processed_at=img.get("processed_at"),
-                    thumbnail_key=img.get("thumbnail_key")
+                    thumbnailUrl=None
                 ))
             
             duplicate_groups.append(DuplicateGroup(
                 images=image_responses,
                 similarity_score=round(avg_similarity, 3)
             ))
+            
+            logger.info(f"Found duplicate group of {len(group)} images with {avg_similarity:.1%} similarity")
     
+    logger.info(f"Total duplicate groups found: {len(duplicate_groups)}")
     return duplicate_groups
-
-
-async def get_image_tags_helper(image_id: str, db) -> List[ImageTag]:
-    """Helper to get image tags"""
-    pipeline = [
-        {"$match": {"image_id": ObjectId(image_id)}},
-        {
-            "$lookup": {
-                "from": "tags",
-                "localField": "tag_id",
-                "foreignField": "_id",
-                "as": "tag_info"
-            }
-        },
-        {"$unwind": "$tag_info"}
-    ]
-    
-    cursor = db.image_tags.aggregate(pipeline)
-    tags = await cursor.to_list(length=100)
-    
-    return [
-        ImageTag(
-            tag_name=tag["tag_info"]["name"],
-            confidence=tag.get("confidence", 1.0),
-            source=tag.get("source", "unknown")
-        )
-        for tag in tags
-    ]

@@ -64,12 +64,26 @@ async def create_indexes():
         # Images collection indexes
         await db.db.images.create_index("user_id")
         await db.db.images.create_index("phash")
-        await db.db.images.create_index([("tags", TEXT)])
+        
+        # FIXED: Create text index on tag_strings field for search
+        try:
+            await db.db.images.create_index([("tag_strings", TEXT)])
+            logger.info("Created text index on images.tag_strings")
+        except Exception as e:
+            logger.warning(f"Text index might already exist: {e}")
+        
+        # Additional indexes for better performance
+        await db.db.images.create_index("status")
+        await db.db.images.create_index("created_at")
         logger.info("Created indexes for images collection")
 
         # Albums collection indexes
         await db.db.albums.create_index("user_id")
         logger.info("Created index: albums.user_id")
+        
+        # Album images junction table
+        await db.db.album_images.create_index([("album_id", ASCENDING), ("image_id", ASCENDING)], unique=True)
+        logger.info("Created compound index on album_images")
 
     except Exception as e:
         logger.error(f"Error creating indexes: {e}")
