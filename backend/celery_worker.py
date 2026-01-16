@@ -1,6 +1,7 @@
 from celery import Celery
 from app.config import settings
 
+
 # Create Celery app
 celery_app = Celery(
     "image_tagger",
@@ -20,6 +21,8 @@ celery_app.conf.update(
     worker_prefetch_multiplier=1,
     imports=('app.tasks.image_processing',)
 )
+
+from app.tasks import image_processing
 
 if __name__ == '__main__':
     celery_app.start()
