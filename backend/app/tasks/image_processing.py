@@ -1,4 +1,3 @@
-
 from celery_worker import celery_app
 from app.storage import storage
 from app.ml.yolo_detector import detector
@@ -36,6 +35,8 @@ def process_image(self, image_id: str):
     db = get_db()
     
     try:
+        logger.info(f"Starting processing for image {image_id}")
+        
         # Update status to processing
         db.images.update_one(
             {"_id": ObjectId(image_id)},
@@ -54,6 +55,8 @@ def process_image(self, image_id: str):
         image_data = storage.download_file(storage_key)
         if not image_data:
             raise Exception("Failed to download image")
+        
+        logger.info(f"Downloaded {len(image_data)} bytes")
         
         # Open image
         image = Image.open(BytesIO(image_data))
@@ -96,9 +99,12 @@ def process_image(self, image_id: str):
             # Run YOLO detection
             logger.info("Running YOLO detection")
             detections = detector.detect_objects(tmp_path)
-            unique_labels = detector.extract_unique_labels(detections)
+            logger.info(f"YOLO returned {len(detections)} detections")
             
-            # FIXED: Store tags directly in the image document
+            unique_labels = detector.extract_unique_labels(detections)
+            logger.info(f"Extracted {len(unique_labels)} unique labels")
+            
+            # Store tags directly in the image document
             tag_docs = []
             tag_strings = []  # For text search
             
@@ -115,7 +121,7 @@ def process_image(self, image_id: str):
                 # Add to searchable strings
                 tag_strings.append(label.lower())
             
-            logger.info(f"Detected {len(tag_docs)} tags: {tag_strings}")
+            logger.info(f"Created {len(tag_docs)} tags: {tag_strings[:10]}")
             
         finally:
             # Clean up temp file
@@ -123,7 +129,7 @@ def process_image(self, image_id: str):
                 os.remove(tmp_path)
         
         # Update image document with tags stored inline
-        db.images.update_one(
+        update_result = db.images.update_one(
             {"_id": ObjectId(image_id)},
             {
                 "$set": {
@@ -138,15 +144,17 @@ def process_image(self, image_id: str):
             }
         )
         
-        logger.info(f"Successfully processed image {image_id} with {len(tag_docs)} tags")
+        logger.info(f"Successfully processed image {image_id} with {len(tag_docs)} tags (modified: {update_result.modified_count})")
+        
         return {
             "status": "success",
             "image_id": image_id,
-            "tags_count": len(tag_docs)
+            "tags_count": len(tag_docs),
+            "tags": tag_strings[:10]  # Return first 10 for logging
         }
         
     except Exception as e:
-        logger.error(f"Error processing image {image_id}: {e}")
+        logger.exception(f"Error processing image {image_id}: {e}")
         
         # Update status to failed
         db.images.update_one(
@@ -160,50 +168,3 @@ def process_image(self, image_id: str):
             }
         )
         raise
-
-
-async def process_image_sync(image_id: str, db, storage_client):
-    """Process image synchronously (extract metadata, tags, thumbnail)"""
-    try:
-        image = await db.images.find_one({"_id": ObjectId(image_id)})
-        if not image:
-            logger.error(f"Image not found: {image_id}")
-            return
-        
-        logger.info(f"Processing image: {image_id}")
-        
-        # Download image from MinIO
-        file_bytes = storage_client.get_file(image["storage_key"])
-        if not file_bytes:
-            raise Exception("Failed to download image from storage")
-        
-        # Extract metadata (simplified)
-        metadata = {
-            "size": len(file_bytes),
-            "format": image["mime_type"]
-        }
-        
-        # Create thumbnail (simplified - just store original for now)
-        thumbnail_key = image["storage_key"]  # TODO: create actual thumbnail
-        
-        # Update image document
-        await db.images.update_one(
-            {"_id": ObjectId(image_id)},
-            {
-                "$set": {
-                    "status": "completed",
-                    "metadata": metadata,
-                    "thumbnail_key": thumbnail_key,
-                    "processed_at": datetime.utcnow()
-                }
-            }
-        )
-        
-        logger.info(f"Image processed successfully: {image_id}")
-        
-    except Exception as e:
-        logger.exception(f"Error processing image {image_id}: {e}")
-        await db.images.update_one(
-            {"_id": ObjectId(image_id)},
-            {"$set": {"status": "error", "error": str(e)}}
-        )

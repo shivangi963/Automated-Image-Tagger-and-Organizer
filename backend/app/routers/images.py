@@ -6,7 +6,7 @@ from app.auth import get_current_user, get_user_id
 from app.database import get_database
 from app.storage import storage
 from app.config import settings
-from app.tasks.image_processing import process_image, process_image_sync  # Add this import
+from app.tasks.image_processing import process_image  # ✅ FIXED - removed process_image_sync
 from datetime import datetime, timedelta
 from bson import ObjectId
 import logging
@@ -64,6 +64,9 @@ async def upload_images(
                 storage_key=storage_key,
                 original_filename=file.filename,
                 mime_type=file.content_type,
+                metadata=None,
+                phash=None,
+                tags=[],
                 status="pending",
                 created_at=image_doc["created_at"]
             ))
@@ -122,8 +125,8 @@ async def get_image(
     if not image:
         raise HTTPException(status_code=404, detail="Image not found")
     
-    # Get tags
-    tags = await get_image_tags(image_id, db)
+    # Tags are stored directly in image document
+    tags = image.get("tags", [])
     
     return ImageResponse(
         id=str(image["_id"]),
@@ -137,7 +140,7 @@ async def get_image(
         status=image["status"],
         created_at=image["created_at"],
         processed_at=image.get("processed_at"),
-        thumbnail_key=image.get("thumbnail_key")
+        thumbnailUrl=None
     )
 
 
@@ -164,75 +167,6 @@ async def get_image_url(
     return {"url": url}
 
 
-@router.post("/{image_id}/tags")
-async def add_custom_tag(
-    image_id: str,
-    tag_name: str,
-    current_user: dict = Depends(get_current_user),
-    db = Depends(get_database)
-):
-    """Add custom tag to image"""
-    user_id = get_user_id(current_user)
-    
-    # Verify image ownership
-    image = await db.images.find_one({"_id": ObjectId(image_id), "user_id": user_id})
-    if not image:
-        raise HTTPException(status_code=404, detail="Image not found")
-    
-    # Find or create tag
-    tag = await db.tags.find_one({"name": tag_name.lower()})
-    if not tag:
-        result = await db.tags.insert_one({
-            "name": tag_name.lower(),
-            "source": "user",
-            "created_at": datetime.utcnow()
-        })
-        tag_id = result.inserted_id
-    else:
-        tag_id = tag["_id"]
-    
-    # Create association
-    await db.image_tags.update_one(
-        {"image_id": ObjectId(image_id), "tag_id": tag_id},
-        {
-            "$set": {
-                "confidence": 1.0,
-                "source": "user",
-                "created_at": datetime.utcnow()
-            }
-        },
-        upsert=True
-    )
-    
-    return {"message": "Tag added successfully"}
-
-
-@router.delete("/{image_id}/tags/{tag_name}")
-async def remove_tag(
-    image_id: str,
-    tag_name: str,
-    current_user: dict = Depends(get_current_user),
-    db = Depends(get_database)
-):
-    """Remove tag from image"""
-    user_id = get_user_id(current_user)
-    
-    # Verify ownership
-    image = await db.images.find_one({"_id": ObjectId(image_id), "user_id": user_id})
-    if not image:
-        raise HTTPException(status_code=404, detail="Image not found")
-    
-    # Find tag
-    tag = await db.tags.find_one({"name": tag_name.lower()})
-    if tag:
-        await db.image_tags.delete_one({
-            "image_id": ObjectId(image_id),
-            "tag_id": tag["_id"]
-        })
-    
-    return {"message": "Tag removed successfully"}
-
-
 @router.delete("/{image_id}")
 async def delete_image(
     image_id: str,
@@ -253,7 +187,6 @@ async def delete_image(
     
     # Delete from database
     await db.images.delete_one({"_id": ObjectId(image_id)})
-    await db.image_tags.delete_many({"image_id": ObjectId(image_id)})
     
     return {"message": "Image deleted successfully"}
 
@@ -282,15 +215,14 @@ async def presign_upload(
         logger.info(f"Generated storage key: {key}")
         
         # Get presigned PUT URL (for uploading)
-        # expires must be a timedelta, not int
         presigned_url = storage.client.get_presigned_url(
             'PUT',
             settings.MINIO_BUCKET,
             key,
-            expires=timedelta(hours=1)  # Changed from expires=3600
+            expires=timedelta(hours=1)
         )
         
-        logger.info(f"Generated presigned URL for {key}: {presigned_url}")
+        logger.info(f"Generated presigned URL for {key}")
         
         return {
             "url": presigned_url,
@@ -329,7 +261,7 @@ async def ingest_image(
             "original_filename": request.filename,
             "mime_type": request.mime_type,
             "storage_key": request.storage_key,
-            "status": "pending",  # ✅ Set to pending so Celery will process
+            "status": "pending",
             "tags": [],
             "tag_strings": [],
             "created_at": datetime.utcnow(),
@@ -339,14 +271,12 @@ async def ingest_image(
         result = await db.images.insert_one(image_doc)
         image_id = str(result.inserted_id)
         
-        # ✅ CRITICAL: Trigger Celery task to process the image
+        # ✅ Trigger Celery task to process the image
         try:
-            from app.tasks.image_processing import process_image
             task = process_image.delay(image_id)
             logger.info(f"Celery task {task.id} started for image {image_id}")
         except Exception as e:
             logger.error(f"Failed to start Celery task: {e}")
-            # Even if Celery fails, return success - image is in DB
         
         return {
             "id": image_id,
@@ -362,38 +292,10 @@ async def ingest_image(
         )
 
 
-async def get_image_tags(image_id: str, db) -> List[ImageTag]:
-    """Helper function to get tags for an image"""
-    pipeline = [
-        {"$match": {"image_id": ObjectId(image_id)}},
-        {
-            "$lookup": {
-                "from": "tags",
-                "localField": "tag_id",
-                "foreignField": "_id",
-                "as": "tag_info"
-            }
-        },
-        {"$unwind": "$tag_info"}
-    ]
-    
-    cursor = db.image_tags.aggregate(pipeline)
-    tags = await cursor.to_list(length=100)
-    
-    return [
-        ImageTag(
-            tag_name=tag["tag_info"]["name"],
-            confidence=tag.get("confidence", 1.0),
-            source=tag.get("source", "unknown")
-        )
-        for tag in tags
-    ]
-
-
-async def build_image_response(image_doc, db) -> Dict[str, Any]:  # Changed return type
+async def build_image_response(image_doc, db) -> Dict[str, Any]:
     """Helper to build ImageResponse with thumbnail URL"""
     image_id = str(image_doc["_id"])
-    tags = await get_image_tags(image_id, db)
+    tags = image_doc.get("tags", [])
     
     # Generate thumbnail URL if available
     thumbnail_url = None
@@ -416,7 +318,7 @@ async def build_image_response(image_doc, db) -> Dict[str, Any]:  # Changed retu
         status=image_doc["status"],
         created_at=image_doc["created_at"],
         processed_at=image_doc.get("processed_at"),
-        thumbnail_key=image_doc.get("thumbnail_key")
+        thumbnailUrl=None
     )
     
     # Add thumbnail URL to dict for frontend

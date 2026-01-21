@@ -65,12 +65,22 @@ async def create_indexes():
         await db.db.images.create_index("user_id")
         await db.db.images.create_index("phash")
         
-        # FIXED: Create text index on tag_strings field for search
+        # FIX: Drop old incorrect text index and create correct one
         try:
+            # Drop the old index if it exists
+            await db.db.images.drop_index("tags_text")
+            logger.info("Dropped old 'tags_text' index")
+        except Exception:
+            pass  # Index might not exist
+        
+        try:
+            # Create text index on tag_strings field for search
             await db.db.images.create_index([("tag_strings", TEXT)])
             logger.info("Created text index on images.tag_strings")
         except Exception as e:
-            logger.warning(f"Text index might already exist: {e}")
+            # If index already exists with correct name, that's fine
+            if "already exists" not in str(e).lower():
+                logger.warning(f"Text index note: {e}")
         
         # Additional indexes for better performance
         await db.db.images.create_index("status")

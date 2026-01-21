@@ -13,10 +13,10 @@ certifi==2024.8.30
 # Object Storage
 minio==7.2.3
 
-# Machine Learning - UPDATED for Python 3.12+
-ultralytics==8.2.0
-torch>=2.3.0
-torchvision>=0.18.0
+# Machine Learning - COMPATIBLE VERSIONS FOR WINDOWS
+torch>=2.2.0
+torchvision>=0.17.0
+ultralytics>=8.1.0
 opencv-python==4.9.0.80
 pillow==10.2.0
 imagehash==4.3.1
@@ -28,6 +28,7 @@ redis==5.0.1
 # Authentication
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
+argon2-cffi==23.1.0
 python-dateutil==2.8.2
 
 # Utilities
