@@ -36,7 +36,7 @@ async def lifespan(app: FastAPI):
         
         # Log configuration
         logger.info(f"✓ API Version: {settings.API_VERSION}")
-        logger.info(f"✓ CORS Origins: {settings.CORS_ORIGINS}")
+        logger.info(f"✓ CORS Origins: {settings.cors_origins}")
         logger.info(f"✓ YOLO Model: {settings.YOLO_MODEL}")
         logger.info(f"✓ YOLO Confidence Threshold: {settings.YOLO_CONFIDENCE}")
         
@@ -70,7 +70,7 @@ app = FastAPI(
 # CORS middleware - MUST be added before routes
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS if settings.CORS_ORIGINS else ["*"],  # Allow all if not configured
+    allow_origins=settings.cors_origins if settings.cors_origins else ["*"],  # Allow all if not configured
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
