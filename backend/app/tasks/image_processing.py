@@ -16,155 +16,170 @@ logger = logging.getLogger(__name__)
 
 
 def get_db():
-    """Get MongoDB database connection"""
-    client = MongoClient(settings.MONGODB_URL)
+    """
+    Get a synchronous MongoDB connection for Celery tasks.
+    Uses the same MONGODB_URL from settings (including auth credentials).
+    """
+    client = MongoClient(
+        settings.MONGODB_URL,
+        serverSelectionTimeoutMS=5000,
+    )
     return client[settings.MONGODB_DB]
 
 
-@celery_app.task(bind=True, name="process_image")
+def _extract_clean_exif(image: Image.Image) -> dict:
+    """Extract EXIF data, skipping non-serializable values."""
+    try:
+        raw = image._getexif()
+        if not raw:
+            return {}
+        clean = {}
+        for k, v in raw.items():
+            try:
+                # Only keep simple serializable types
+                if isinstance(v, (str, int, float, bool)):
+                    clean[str(k)] = v
+            except Exception:
+                pass
+        return clean
+    except Exception:
+        return {}
+
+
+@celery_app.task(bind=True, name="process_image", max_retries=3)
 def process_image(self, image_id: str):
     """
-    Process uploaded image:
+    Full image processing pipeline:
     1. Download from MinIO
-    2. Extract metadata
+    2. Extract metadata + EXIF
     3. Generate thumbnail
-    4. Compute pHash
-    5. Run YOLO detection
-    6. Save tags to database
+    4. Compute perceptual hash (for duplicate detection)
+    5. Run YOLO object detection
+    6. Save all results to MongoDB
     """
     db = get_db()
-    
+
     try:
-        logger.info(f"Starting processing for image {image_id}")
-        
-        # Update status to processing
+        logger.info(f"[{image_id}] Starting processing...")
+
+        # Mark as processing
         db.images.update_one(
             {"_id": ObjectId(image_id)},
             {"$set": {"status": "processing"}}
         )
-        
-        # Get image record
+
+        # Load image record
         image_doc = db.images.find_one({"_id": ObjectId(image_id)})
         if not image_doc:
-            raise Exception(f"Image {image_id} not found")
-        
+            raise ValueError(f"Image {image_id} not found in database")
+
         storage_key = image_doc["storage_key"]
-        
-        # Download image from MinIO
-        logger.info(f"Downloading image: {storage_key}")
+
+        # ── Download from MinIO ───────────────────────────────
+        logger.info(f"[{image_id}] Downloading from MinIO: {storage_key}")
         image_data = storage.download_file(storage_key)
         if not image_data:
-            raise Exception("Failed to download image")
-        
-        logger.info(f"Downloaded {len(image_data)} bytes")
-        
-        # Open image
+            raise RuntimeError("Failed to download image from MinIO")
+
+        # ── Open with PIL ─────────────────────────────────────
         image = Image.open(BytesIO(image_data))
-        
-        # Extract metadata
+
+        # Convert to RGB if needed (e.g. PNG with alpha channel)
+        if image.mode not in ("RGB", "L"):
+            image = image.convert("RGB")
+
+        # ── Metadata ──────────────────────────────────────────
         metadata = {
             "width": image.width,
             "height": image.height,
-            "format": image.format,
+            "format": image.format or "JPEG",
             "mode": image.mode,
-            "size_bytes": len(image_data)
+            "size_bytes": len(image_data),
+            "exif": _extract_clean_exif(image),
         }
-        
-        # Extract EXIF if available
-        if hasattr(image, '_getexif') and image._getexif():
-            metadata["exif"] = dict(image._getexif())
-        
-        # Generate thumbnail
+
+        # ── Thumbnail ─────────────────────────────────────────
         thumbnail = image.copy()
-        thumbnail.thumbnail((300, 300), Image.Resampling.LANCZOS)
-        
+        thumbnail.thumbnail((400, 400), Image.Resampling.LANCZOS)
         thumb_buffer = BytesIO()
-        thumbnail.save(thumb_buffer, format='JPEG', quality=85)
+        thumbnail.save(thumb_buffer, format="JPEG", quality=85, optimize=True)
         thumb_data = thumb_buffer.getvalue()
-        
-        # Upload thumbnail
+
         thumb_key = f"thumbnails/{storage_key}"
         storage.upload_file(thumb_data, thumb_key, "image/jpeg")
-        
-        # Save image to temp file for YOLO processing
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as tmp_file:
-            tmp_file.write(image_data)
-            tmp_path = tmp_file.name
-        
+        logger.info(f"[{image_id}] Thumbnail uploaded")
+
+        # ── Write to temp file for YOLO + pHash ───────────────
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
+            image.save(tmp, format="JPEG")
+            tmp_path = tmp.name
+
         try:
-            # Compute pHash
-            logger.info("Computing perceptual hash")
+            # pHash (perceptual hash for duplicate detection)
+            logger.info(f"[{image_id}] Computing pHash...")
             phash = compute_phash(tmp_path)
-            
-            # Run YOLO detection
-            logger.info("Running YOLO detection")
+
+            # YOLO detection
+            logger.info(f"[{image_id}] Running YOLO detection...")
             detections = detector.detect_objects(tmp_path)
-            logger.info(f"YOLO returned {len(detections)} detections")
-            
             unique_labels = detector.extract_unique_labels(detections)
-            logger.info(f"Extracted {len(unique_labels)} unique labels")
-            
-            # Store tags directly in the image document
-            tag_docs = []
-            tag_strings = []  # For text search
-            
-            for label_info in unique_labels:
-                label = label_info['label']
-                confidence = label_info['confidence']
-                
-                tag_docs.append({
-                    "tag_name": label,
-                    "confidence": confidence,
-                    "source": "yolo"
-                })
-                
-                # Add to searchable strings
-                tag_strings.append(label.lower())
-            
-            logger.info(f"Created {len(tag_docs)} tags: {tag_strings[:10]}")
-            
+            logger.info(f"[{image_id}] YOLO found {len(unique_labels)} unique labels")
+
         finally:
-            # Clean up temp file
             if os.path.exists(tmp_path):
                 os.remove(tmp_path)
-        
-        # Update image document with tags stored inline
-        update_result = db.images.update_one(
+
+        # ── Build tag documents ───────────────────────────────
+        tag_docs = [
+            {
+                "tag_name": item["label"],
+                "confidence": round(item["confidence"], 4),
+                "source": "yolo",
+            }
+            for item in unique_labels
+        ]
+        tag_strings = [t["tag_name"].lower() for t in tag_docs]
+
+        # ── Save to MongoDB ───────────────────────────────────
+        result = db.images.update_one(
             {"_id": ObjectId(image_id)},
             {
                 "$set": {
                     "metadata": metadata,
                     "phash": phash,
                     "thumbnail_key": thumb_key,
-                    "tags": tag_docs,  # Store tags directly
-                    "tag_strings": tag_strings,  # For text search
+                    "tags": tag_docs,
+                    "tag_strings": tag_strings,
                     "status": "completed",
-                    "processed_at": datetime.utcnow()
+                    "processed_at": datetime.utcnow(),
+                    "error": None,
                 }
-            }
+            },
         )
-        
-        logger.info(f"Successfully processed image {image_id} with {len(tag_docs)} tags (modified: {update_result.modified_count})")
-        
+
+        logger.info(
+            f"[{image_id}] ✓ Done — {len(tag_docs)} tags: {tag_strings[:8]}"
+            f" (modified: {result.modified_count})"
+        )
+
         return {
             "status": "success",
             "image_id": image_id,
             "tags_count": len(tag_docs),
-            "tags": tag_strings[:10]  # Return first 10 for logging
+            "tags": tag_strings[:10],
         }
-        
-    except Exception as e:
-        logger.exception(f"Error processing image {image_id}: {e}")
-        
-        # Update status to failed
+
+    except Exception as exc:
+        logger.exception(f"[{image_id}] ✗ Processing failed: {exc}")
         db.images.update_one(
             {"_id": ObjectId(image_id)},
             {
                 "$set": {
                     "status": "failed",
-                    "error": str(e),
-                    "processed_at": datetime.utcnow()
+                    "error": str(exc),
+                    "processed_at": datetime.utcnow(),
                 }
-            }
+            },
         )
-        raise
+        # Retry with exponential backoff
+        raise self.retry(exc=exc, countdown=2 ** self.request.retries)

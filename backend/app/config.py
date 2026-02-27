@@ -13,7 +13,6 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # CORS origins (can also be set via CORS_ORIGINS in .env as JSON or comma-separated values)
     
     CORS_ORIGINS: List[str] = Field(default_factory=list)
 
@@ -32,8 +31,8 @@ class Settings(BaseSettings):
     API_VERSION: str = "v1"
 
     # MongoDB
-    MONGODB_URL: str = os.getenv("MONGODB_URL", "mongodb://localhost:27017")
-    MONGODB_DB: str = os.getenv("MONGODB_DB", "image_tagger")
+    MONGODB_URL: str =  "mongodb://admin:admin123@localhost:27017/?authSource=admin"
+    MONGODB_DB: str = "image_tagger"
 
     # MinIO
     MINIO_ENDPOINT: str = os.getenv("MINIO_ENDPOINT", "localhost:9000")
