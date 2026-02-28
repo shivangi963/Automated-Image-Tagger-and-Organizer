@@ -54,3 +54,11 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+
+# Startup diagnostic — remove after confirming everything works
+import sys as _sys
+_sys.stderr.write(f"[config] ROOT_ENV path: {ROOT_ENV}\n")
+_sys.stderr.write(f"[config] ROOT_ENV exists: {ROOT_ENV.exists()}\n")
+_sys.stderr.write(f"[config] MONGODB_URL: '{settings.MONGODB_URL[:40]}'\n")
+_sys.stderr.write(f"[config] CORS_ORIGINS raw: '{settings.CORS_ORIGINS}'\n")
