@@ -48,12 +48,21 @@ def hamming_distance(hash1: str, hash2: str) -> int:
         return 999  # treat as completely different on error
 
 
+def similarity_score(hash1: str, hash2: str, max_distance: int = 64) -> float:
+    """
+    Return a similarity score between 0.0 and 1.0.
+    1.0 = identical images, 0.0 = completely different.
+    """
+    distance = hamming_distance(hash1, hash2)
+    return max(0.0, 1.0 - distance / max_distance)
+
+
 def are_duplicates(hash1: str, hash2: str, threshold: int = DUPLICATE_THRESHOLD) -> bool:
     """Return True if two images are near-duplicates."""
     return hamming_distance(hash1, hash2) <= threshold
 
 
-def find_duplicates(image_hashes: List[Tuple[str, str]]) -> List[List[str]]:
+def find_duplicates(image_hashes: List[Tuple[str, str]], threshold: int = DUPLICATE_THRESHOLD) -> List[List[str]]:
     """
     Given a list of (image_id, phash_hex) tuples, return groups of duplicate
     image_ids.
@@ -78,7 +87,7 @@ def find_duplicates(image_hashes: List[Tuple[str, str]]) -> List[List[str]]:
             if visited[j]:
                 continue
             img_id_j, hash_j = image_hashes[j]
-            if are_duplicates(hash_i, hash_j):
+            if are_duplicates(hash_i, hash_j, threshold):
                 group.append(img_id_j)
                 visited[j] = True
 

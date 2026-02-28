@@ -2,14 +2,12 @@ from pathlib import Path
 from typing import List
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from dotenv import load_dotenv
-import os
 
 
 # .env lives in project root — two levels above backend/app/config.py
 ROOT_ENV = Path(__file__).resolve().parents[2] / ".env"
 
 # override=True makes .env values WIN over any polluted system/user env vars.
-# Correct approach for dev — safe to commit since .env stays in .gitignore.
 load_dotenv(ROOT_ENV, override=True)
 
 
@@ -56,5 +54,5 @@ class Settings(BaseSettings):
             return []
         return [x.strip() for x in v.split(",") if x.strip()]
 
-print(">>> MONGODB_URL from os.environ:", os.environ.get("MONGODB_URL", "NOT SET"))
+
 settings = Settings()

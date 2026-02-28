@@ -1,20 +1,13 @@
-// src/api/auth.js
-import { api } from "../store/auth";
+import api from "./axiosClient";
 
 // LOGIN
-export const loginUser = async (data) => {
-  return api().post("/auth/login", data);
-};
+export const loginUser = (data) => api.post("/auth/login", data);
 
 // REGISTER
-export const registerUser = async (data) => {
-  return api().post("/auth/register", data);
-};
+export const registerUser = (data) => api.post("/auth/register", data);
 
 // GET CURRENT USER
-export const getCurrentUser = async () => {
-  return api().get("/auth/me");
-};
+export const getCurrentUser = () => api.get("/auth/me");
 
 // LOGOUT
 export const logout = () => {

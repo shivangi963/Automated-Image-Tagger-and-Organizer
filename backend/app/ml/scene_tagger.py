@@ -1,8 +1,3 @@
-"""
-Scene Tagger: combines BLIP captioning + CLIP zero-shot classification
-to produce rich semantic tags (sky, beach, indoor, outdoor, etc.)
-that YOLO cannot detect.
-"""
 import re
 import logging
 from typing import List, Dict, Optional
@@ -11,9 +6,6 @@ import torch
 
 logger = logging.getLogger(__name__)
 
-# ── CLIP zero-shot tag vocabulary ────────────────────────────────────────────
-# These are evaluated in batches against the image embedding.
-# Add / remove freely — no retraining needed.
 CLIP_TAGS = [
     # Sky & weather
     "blue sky", "cloudy sky", "sunset sky", "night sky", "foggy", "rainy", "snowy",
