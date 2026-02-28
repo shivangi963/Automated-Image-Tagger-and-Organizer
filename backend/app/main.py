@@ -5,9 +5,10 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from contextlib import asynccontextmanager
 from app.config import settings
 from app.database import connect_to_mongo, close_mongo_connection
-from app.routers import auth, images, albums, search
+from app.routers import auth, images, albums, search, duplicates
 from app.storage import storage
 import logging
+
 
 # Configure logging
 logging.basicConfig(
@@ -145,6 +146,7 @@ app.include_router(auth.router)
 app.include_router(images.router)
 app.include_router(albums.router)
 app.include_router(search.router)
+app.include_router(duplicates.router)
 
 
 # Error handlers
