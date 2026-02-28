@@ -1,10 +1,16 @@
 from pathlib import Path
 from typing import List
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field
+from dotenv import load_dotenv
+import os
+
 
 # .env lives in project root — two levels above backend/app/config.py
 ROOT_ENV = Path(__file__).resolve().parents[2] / ".env"
+
+# override=True makes .env values WIN over any polluted system/user env vars.
+# Correct approach for dev — safe to commit since .env stays in .gitignore.
+load_dotenv(ROOT_ENV, override=True)
 
 
 class Settings(BaseSettings):
@@ -18,7 +24,7 @@ class Settings(BaseSettings):
     DEBUG: bool = True
     API_VERSION: str = "v1"
 
-    MONGODB_URL: str = "mongodb://admin:admin123@localhost:27017/?authSource=admin"
+    MONGODB_URL: str = "mongodb://admin:admin123@localhost:27018/?authSource=admin"
     MONGODB_DB: str = "image_tagger"
 
     MINIO_ENDPOINT: str = "localhost:9000"
@@ -41,8 +47,6 @@ class Settings(BaseSettings):
     MAX_FILE_SIZE: int = 10485760
     ALLOWED_EXTENSIONS: str = "jpg,jpeg,png,gif,bmp,webp"
 
-    # Store as plain str to avoid pydantic-settings JSON-parsing issues
-    # Use settings.cors_origins to get List[str]
     CORS_ORIGINS: str = "http://localhost:3000"
 
     @property
@@ -52,13 +56,5 @@ class Settings(BaseSettings):
             return []
         return [x.strip() for x in v.split(",") if x.strip()]
 
-
+print(">>> MONGODB_URL from os.environ:", os.environ.get("MONGODB_URL", "NOT SET"))
 settings = Settings()
-
-
-# Startup diagnostic — remove after confirming everything works
-import sys as _sys
-_sys.stderr.write(f"[config] ROOT_ENV path: {ROOT_ENV}\n")
-_sys.stderr.write(f"[config] ROOT_ENV exists: {ROOT_ENV.exists()}\n")
-_sys.stderr.write(f"[config] MONGODB_URL: '{settings.MONGODB_URL[:40]}'\n")
-_sys.stderr.write(f"[config] CORS_ORIGINS raw: '{settings.CORS_ORIGINS}'\n")
