@@ -1,112 +1,91 @@
-from ultralytics import YOLO
-from app.config import settings
-import logging
-from typing import List, Dict
-import numpy as np
-import torch 
+"""
+YOLO object detector — handles the "hard" object detections
+(person, car, dog, cat, bottle, phone…) that BLIP/CLIP are less precise about.
 
+Combined with scene_tagger.py (BLIP + CLIP) this gives both:
+  • Precise object boxes    — YOLO
+  • Rich scene / context    — BLIP caption + CLIP zero-shot tags
+
+Model: YOLOv8n (nano) by default — very fast, ~6 MB, runs on CPU.
+Swap to "yolov8s.pt" or "yolov8m.pt" for better accuracy.
+"""
+import logging
+from typing import List, Dict, Optional
 
 logger = logging.getLogger(__name__)
-import functools
-# Save the original torch.load function
-_original_torch_load = torch.load
 
-def torch_unsafe_load(*args, **kwargs):
-    # Ensure weights_only is explicitly set to False
-    kwargs['weights_only'] = False
-    return _original_torch_load(*args, **kwargs)
-torch.load = torch_unsafe_load
+# Default confidence threshold — detections below this are discarded
+CONFIDENCE_THRESHOLD = 0.30
+
 
 class YOLODetector:
-    def __init__(self):
-        self.model = None
-        self._load_model()
-    
+    """Lazy-loading YOLOv8 wrapper."""
+
+    def __init__(self, model_name: str = "yolov8n.pt", confidence: float = CONFIDENCE_THRESHOLD):
+        self._model = None
+        self._model_name = model_name
+        self._confidence = confidence
+
     def _load_model(self):
-        """Load YOLO model"""
+        if self._model is not None:
+            return
         try:
-            logger.info(f"Loading YOLO model: {settings.YOLO_MODEL}")
-            self.model = YOLO(settings.YOLO_MODEL)
-            logger.info("YOLO model loaded successfully")
+            from ultralytics import YOLO
+            logger.info(f"Loading YOLO model '{self._model_name}' (downloads ~6 MB on first run)…")
+            self._model = YOLO(self._model_name)
+            self._model.fuse()
+            logger.info("✓ YOLO loaded")
         except Exception as e:
-            logger.error(f"Error loading YOLO model: {e}")
+            logger.error(f"Failed to load YOLO: {e}")
             raise
-    
+
     def detect_objects(self, image_path: str) -> List[Dict]:
         """
-        Detect objects in image
-        Returns list of detections with label, confidence, and bbox
+        Run YOLO detection on an image file.
+
+        Returns a list of detection dicts:
+            [{"label": "person", "confidence": 0.92, "bbox": [x1, y1, x2, y2]}, ...]
         """
-        if not self.model:
-            raise RuntimeError("YOLO model not loaded")
-        
+        self._load_model()
         try:
-            # Run inference
-            results = self.model.predict(
-                image_path,
-                conf=settings.YOLO_CONFIDENCE,
-                verbose=False
+            results = self._model.predict(
+                source=image_path,
+                conf=self._confidence,
+                verbose=False,
             )
-            
             detections = []
-            
-            # Process results
             for result in results:
-                boxes = result.boxes
-                
-                for box in boxes:
-                    # Get class name and confidence
+                for box in result.boxes:
                     cls_id = int(box.cls[0])
-                    confidence = float(box.conf[0])
                     label = result.names[cls_id]
-                    
-                    # Get bounding box coordinates
-                    x1, y1, x2, y2 = box.xyxy[0].tolist()
-                    
-                    detection = {
-                        'label': label,
-                        'confidence': round(confidence, 3),
-                        'bbox': {
-                            'x1': round(x1, 2),
-                            'y1': round(y1, 2),
-                            'x2': round(x2, 2),
-                            'y2': round(y2, 2)
-                        }
-                    }
-                    
-                    detections.append(detection)
-            
-            logger.info(f"Detected {len(detections)} objects")
+                    conf = float(box.conf[0])
+                    x1, y1, x2, y2 = [round(float(v), 1) for v in box.xyxy[0]]
+                    detections.append({
+                        "label": label,
+                        "confidence": round(conf, 4),
+                        "bbox": [x1, y1, x2, y2],
+                    })
+            logger.info(f"YOLO detected {len(detections)} object(s) in {image_path}")
             return detections
-            
         except Exception as e:
-            logger.error(f"Error during detection: {e}")
+            logger.error(f"YOLO inference error: {e}")
             return []
-    
+
     def extract_unique_labels(self, detections: List[Dict]) -> List[Dict]:
         """
-        Extract unique labels with highest confidence
-        Returns list of {label, confidence}
+        Collapse multiple boxes of the same class into one entry,
+        keeping the highest-confidence instance.
+
+        [{"label": "person", "confidence": 0.92}, ...]
         """
-        label_confidence = {}
-        
-        for detection in detections:
-            label = detection['label']
-            confidence = detection['confidence']
-            
-            if label not in label_confidence or confidence > label_confidence[label]:
-                label_confidence[label] = confidence
-        
-        # Convert to list and sort by confidence
-        unique_labels = [
-            {'label': label, 'confidence': conf}
-            for label, conf in label_confidence.items()
-        ]
-        
-        unique_labels.sort(key=lambda x: x['confidence'], reverse=True)
-        
-        return unique_labels
+        best: Dict[str, float] = {}
+        for d in detections:
+            label = d["label"]
+            conf = d["confidence"]
+            if label not in best or conf > best[label]:
+                best[label] = conf
+        return [{"label": lbl, "confidence": conf} for lbl, conf in best.items()]
 
 
-# Global detector instance
+# Module-level singleton
 detector = YOLODetector()

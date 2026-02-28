@@ -1,0 +1,57 @@
+# ============================================================
+# Backend Dependencies — Image Tagger Organizer
+# ============================================================
+
+# Web Framework
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+python-multipart==0.0.6
+
+# Database
+pymongo[srv]==4.6.1
+motor==3.3.2
+certifi==2024.8.30
+
+# Object Storage
+minio==7.2.3
+
+# ── Machine Learning ─────────────────────────────────────────
+# PyTorch — CPU build (replace with CUDA wheel if you have a GPU)
+torch>=2.2.0
+torchvision>=0.17.0
+
+# YOLO (object detection — person, car, dog …)
+ultralytics>=8.1.0
+opencv-python==4.9.0.80
+
+# Transformers: BLIP (captioning) + CLIP (zero-shot scene tags)
+# These models are downloaded automatically on first use.
+transformers>=4.40.0
+accelerate>=0.26.0       # speeds up transformers inference
+sentencepiece>=0.1.99    # needed by some tokenizers
+
+# OCR
+easyocr>=1.7.1           # downloads ~200 MB model on first use
+
+# Image utilities
+pillow==10.2.0
+imagehash==4.3.1         # perceptual hashing for duplicate detection
+
+# ── Task Queue ───────────────────────────────────────────────
+celery==5.3.6
+redis==5.0.1
+
+# ── Authentication ───────────────────────────────────────────
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+argon2-cffi==23.1.0
+python-dateutil==2.8.2
+
+# ── Pydantic / Config ────────────────────────────────────────
+pydantic==2.5.3
+pydantic-settings==2.1.0
+python-dotenv==1.0.0
+
+# ── Testing (optional) ───────────────────────────────────────
+pytest==7.4.4
+httpx==0.26.0

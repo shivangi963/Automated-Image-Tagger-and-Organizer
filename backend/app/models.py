@@ -5,8 +5,6 @@ from bson import ObjectId
 
 
 class PyObjectId(ObjectId):
-    """Custom ObjectId type for Pydantic."""
-
     @classmethod
     def __get_validators__(cls):
         yield cls.validate
@@ -18,6 +16,9 @@ class PyObjectId(ObjectId):
         if not ObjectId.is_valid(v):
             raise ValueError("Invalid ObjectId")
         return ObjectId(v)
+
+
+# ── Auth ─────────────────────────────────────────────────────────────────────
 
 class UserCreate(BaseModel):
     email: EmailStr
@@ -38,7 +39,7 @@ class UserInDB(BaseModel):
 
     class Config:
         from_attributes = True
-        allow_population_by_field_name = True
+        populate_by_name = True
         json_encoders = {ObjectId: str}
 
 
@@ -61,24 +62,27 @@ class TokenData(BaseModel):
     email: Optional[str] = None
 
 
+# ── Image upload helpers ──────────────────────────────────────────────────────
+
 class ImageUpload(BaseModel):
     filename: str
     content_type: str
 
 
 class PresignRequest(BaseModel):
-    """Schema for requesting a pre-signed URL for file upload."""
     filename: str = Field(..., description="Name of the file being uploaded")
-    mime: str = Field(..., description="MIME type of the file (e.g., 'image/jpeg')")
-    
-    class Config:
-        populate_by_name = True  # Allow both 'mime' and 'content_type'
+    mime: str = Field(..., description="MIME type, e.g. 'image/jpeg'")
 
+    class Config:
+        populate_by_name = True
+
+
+# ── Image core models ─────────────────────────────────────────────────────────
 
 class ImageTag(BaseModel):
     tag_name: str
     confidence: float
-    source: str  # "yolo" or "user"
+    source: str  # "yolo" | "blip_caption" | "clip_scene" | "ocr" | "user"
 
 
 class ImageMetadata(BaseModel):
@@ -87,7 +91,13 @@ class ImageMetadata(BaseModel):
     format: str
     mode: str
     size_bytes: int
-    exif: Optional[Dict[str, Any]] = None  # Cleaned EXIF only
+    exif: Optional[Dict[str, Any]] = None
+
+
+class OCRRegion(BaseModel):
+    text: str
+    confidence: float
+    bbox: List[List[int]]  # 4 corner points [[x,y],...]
 
 
 class ImageInDB(BaseModel):
@@ -99,9 +109,15 @@ class ImageInDB(BaseModel):
     metadata: Optional[ImageMetadata] = None
     phash: Optional[str] = None
     tags: List[ImageTag] = Field(default_factory=list)
-    
-    # Added for MongoDB text search compatibility
     tag_strings: List[str] = Field(default_factory=list)
+
+    # ── New enrichment fields ──────────────────────────────────────────────
+    # BLIP natural-language caption
+    caption: Optional[str] = None
+    # EasyOCR full text extracted from image
+    ocr_text: Optional[str] = None
+    # Individual OCR bounding-box regions (stored but not always returned)
+    ocr_regions: Optional[List[Dict]] = None
 
     status: str = "pending"
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -110,7 +126,7 @@ class ImageInDB(BaseModel):
 
     class Config:
         from_attributes = True
-        allow_population_by_field_name = True
+        populate_by_name = True
         json_encoders = {ObjectId: str}
 
 
@@ -127,6 +143,9 @@ class ImageResponse(BaseModel):
     created_at: datetime
     processed_at: Optional[datetime] = None
     thumbnailUrl: Optional[str] = None
+    # Enrichment
+    caption: Optional[str] = None
+    ocr_text: Optional[str] = None
 
     class Config:
         json_encoders = {ObjectId: str}
@@ -135,6 +154,8 @@ class ImageResponse(BaseModel):
 class ImageUpdate(BaseModel):
     tags: List[str] = Field(default_factory=list)
 
+
+# ── Album models ──────────────────────────────────────────────────────────────
 
 class AlbumCreate(BaseModel):
     name: str
@@ -156,7 +177,7 @@ class AlbumInDB(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     class Config:
-        allow_population_by_field_name = True
+        populate_by_name = True
         json_encoders = {ObjectId: str}
 
 
@@ -177,6 +198,8 @@ class AlbumAddImages(BaseModel):
     image_ids: List[str]
 
 
+# ── Search models ─────────────────────────────────────────────────────────────
+
 class SearchQuery(BaseModel):
     query: Optional[str] = None
     tags: Optional[List[str]] = None
@@ -195,12 +218,3 @@ class SearchResponse(BaseModel):
 class DuplicateGroup(BaseModel):
     images: List[ImageResponse]
     similarity_score: float
-
-# Find any model with Config class and update:
-
-class SomeModel(BaseModel):
-    # ...fields...
-    
-    class Config:
-        populate_by_name = True  # Changed from allow_population_by_field_name
-        json_encoders = {ObjectId: str}
