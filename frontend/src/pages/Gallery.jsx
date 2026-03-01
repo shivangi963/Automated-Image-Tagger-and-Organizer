@@ -15,6 +15,8 @@ import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import api from '../api/axiosClient.js';
 import getErrorMessage from '../utils/getErrorMessage.js';
 import AppLayout from '../components/AppLayout.jsx';
+import OCRTextViewer, { shouldShowOCR } from '../components/OCRTextViewer.jsx';
+import TextSnippetIcon from '@mui/icons-material/TextSnippet';
 
 const fetchImages = async (search) => {
   if (search && search.trim()) {
@@ -101,8 +103,6 @@ export default function Gallery() {
   return (
     <AppLayout title="Gallery">
       <Container maxWidth="xl" sx={{ py: 3 }}>
-
-        {/* ── Search / Upload bar — BLUE ── */}
         <Box sx={{ display: 'flex', justifyContent: 'center', mb: 4 }}>
           <Paper
             elevation={0}
@@ -110,7 +110,7 @@ export default function Gallery() {
               p: 3,
               width: '100%',
               maxWidth: 900,
-              bgcolor: '#1976d2',          // solid MUI primary blue
+              bgcolor: '#1976d2',         
               borderRadius: 3,
               boxShadow: '0 8px 32px rgba(25, 118, 210, 0.30)',
             }}
@@ -301,7 +301,7 @@ export default function Gallery() {
                               }}
                               onClick={() => setSelectedImage(img)}
                             />
-                            {img.status === 'pending' && (
+                            {(img.status === 'pending' || img.status === 'processing') && (
                               <Chip
                                 label="AI Processing..."
                                 size="small"
@@ -319,8 +319,16 @@ export default function Gallery() {
                                 sx={{ position: 'absolute', top: 12, right: 12, fontWeight: 600 }}
                               />
                             )}
+                            {img.status === 'completed' && shouldShowOCR(img) && (
+                              <Chip
+                                label="Text detected"
+                                size="small"
+                                color="secondary"
+                                icon={<TextSnippetIcon />}
+                                sx={{ position: 'absolute', top: tags.length > 0 ? 44 : 12, right: 12, fontWeight: 600 }}
+                              />
+                            )}
                           </Box>
-
                           <CardContent sx={{ flexGrow: 1, pb: 1 }}>
                             <Tooltip title={img.original_filename || img.filename}>
                               <Typography variant="subtitle2" noWrap sx={{ mb: 1.5, fontWeight: 600 }}>
@@ -338,7 +346,7 @@ export default function Gallery() {
                                       sx={{
                                         fontSize: '0.7rem',
                                         height: 24,
-                                        bgcolor: '#1976d2',   // ← blue
+                                        bgcolor: '#1976d2',   
                                         color: 'white',
                                         fontWeight: 500,
                                       }}
@@ -354,7 +362,7 @@ export default function Gallery() {
                                 </>
                               ) : (
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                  {img.status === 'pending' ? (
+                                  {(img.status === 'pending' || img.status === 'processing') ? (
                                     <>
                                       <CircularProgress size={16} />
                                       <Typography variant="caption" color="warning.main" sx={{ fontStyle: 'italic' }}>
@@ -426,7 +434,7 @@ export default function Gallery() {
                     <Chip
                       key={idx}
                       label={tag}
-                      sx={{ bgcolor: '#1976d2', color: 'white', fontWeight: 500 }}  // ← blue
+                      sx={{ bgcolor: '#1976d2', color: 'white', fontWeight: 500 }}  
                     />
                   ))
                 ) : (
@@ -445,6 +453,8 @@ export default function Gallery() {
                   </Typography>
                 </Box>
               )}
+              {/* OCR Text Extraction */}
+              <OCRTextViewer img={selectedImage} />
               <Box sx={{ mt: 3, p: 2, bgcolor: 'grey.50', borderRadius: 2 }}>
                 <Typography variant="caption" color="textSecondary" display="block">
                   <strong>Status:</strong> {selectedImage.status || 'unknown'}

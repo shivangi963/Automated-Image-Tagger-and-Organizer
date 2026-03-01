@@ -56,9 +56,11 @@ def _make_image_dict(img: dict) -> dict:
         "status": img.get("status", "pending"),
         "created_at": img.get("created_at"),
         "processed_at": img.get("processed_at"),
-        # ✅ URLs embedded — frontend needs zero extra requests
         "url": url,
         "thumbnailUrl": thumbnail_url,
+        "caption": img.get("caption"),
+        "ocr_text": img.get("ocr_text"),
+        "ocr_regions": img.get("ocr_regions", []),
     }
 
 

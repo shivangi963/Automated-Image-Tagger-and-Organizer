@@ -50,6 +50,9 @@ def _make_image_dict(img: dict) -> dict:
         "processed_at": img.get("processed_at"),
         "url": url,
         "thumbnailUrl": thumbnail_url,
+        "caption": img.get("caption"),
+        "ocr_text": img.get("ocr_text"),
+        "ocr_regions": img.get("ocr_regions", []),
     }
 
 

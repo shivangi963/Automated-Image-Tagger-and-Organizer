@@ -149,59 +149,61 @@ export default function Search() {
             <Button variant="outlined" onClick={handleClear}>Clear Search</Button>
           </Box>
         )}
-
-        {/* Results Grid */}
-        <Grid container spacing={3}>
-          {images.map((img) => {
-            const tags = getTags(img);
-            return (
-              <Grid item xs={12} sm={6} md={4} lg={3} key={img._id || img.id}>
-                <Card
-                  sx={{
-                    height: '100%', display: 'flex', flexDirection: 'column',
-                    transition: 'all 0.3s',
-                    '&:hover': { transform: 'translateY(-4px)', boxShadow: 4 },
-                  }}
-                >
-                  <CardMedia
-                    component="img"
-                    height="200"
-                    image={img.thumbnailUrl || img.url || ''}
-                    alt={img.original_filename || img.filename}
-                    sx={{ objectFit: 'cover' }}
-                  />
-                  <CardContent>
-                    <Tooltip title={img.original_filename || img.filename}>
-                      <Typography variant="subtitle2" noWrap gutterBottom>
-                        {img.original_filename || img.filename}
-                      </Typography>
-                    </Tooltip>
-                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                      {tags.map((tagName, idx) => {
-                        const isMatch = search && tagName.toLowerCase().includes(search.toLowerCase());
-                        return (
-                          <Chip
-                            key={idx}
-                            label={tagName}
-                            size="small"
-                            sx={{
-                              fontSize: '0.7rem',
-                              height: 24,
-                              bgcolor: isMatch ? '#1565c0' : '#1976d2',  // darker blue for matches
-                              color: 'white',
-                              fontWeight: isMatch ? 700 : 500,
-                              border: isMatch ? '2px solid #0d47a1' : 'none',
-                            }}
-                          />
-                        );
-                      })}
-                    </Box>
-                  </CardContent>
-                </Card>
-              </Grid>
-            );
-          })}
-        </Grid>
+        <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+          <Box sx={{ maxWidth: 1400, width: '100%' }}>
+            <Grid container spacing={3}>
+              {images.map((img) => {
+                const tags = getTags(img);
+                return (
+                  <Grid item xs={12} sm={6} md={4} lg={3} key={img._id || img.id}>
+                    <Card
+                      sx={{
+                        height: '100%', display: 'flex', flexDirection: 'column',
+                        transition: 'all 0.3s',
+                        '&:hover': { transform: 'translateY(-4px)', boxShadow: 4 },
+                      }}
+                    >
+                      <CardMedia
+                        component="img"
+                        height="200"
+                        image={img.thumbnailUrl || img.url || ''}
+                        alt={img.original_filename || img.filename}
+                        sx={{ objectFit: 'cover' }}
+                      />
+                      <CardContent>
+                        <Tooltip title={img.original_filename || img.filename}>
+                          <Typography variant="subtitle2" noWrap gutterBottom>
+                            {img.original_filename || img.filename}
+                          </Typography>
+                        </Tooltip>
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                          {tags.map((tagName, idx) => {
+                            const isMatch = search && tagName.toLowerCase().includes(search.toLowerCase());
+                            return (
+                              <Chip
+                                key={idx}
+                                label={tagName}
+                                size="small"
+                                sx={{
+                                  fontSize: '0.7rem',
+                                  height: 24,
+                                  bgcolor: isMatch ? '#1565c0' : '#1976d2',  
+                                  color: 'white',
+                                  fontWeight: isMatch ? 700 : 500,
+                                  border: isMatch ? '2px solid #0d47a1' : 'none',
+                                }}
+                              />
+                            );
+                          })}
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                );
+              })}
+            </Grid>
+          </Box>
+        </Box>
       </Container>
     </AppLayout>
   );
