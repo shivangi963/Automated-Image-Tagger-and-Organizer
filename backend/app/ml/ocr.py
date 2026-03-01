@@ -1,8 +1,3 @@
-"""
-OCR extractor using EasyOCR.
-Detects and extracts printed / handwritten text from images.
-Useful for signs, labels, documents, memes, screenshots, etc.
-"""
 import logging
 from typing import Dict, List, Optional
 
@@ -10,11 +5,7 @@ logger = logging.getLogger(__name__)
 
 
 class OCRExtractor:
-    """
-    Lazy-loading EasyOCR wrapper.
-    Model downloads ~200 MB on first use.
-    """
-
+    
     def __init__(self, languages: List[str] = None):
         self._reader = None
         self._languages = languages or ["en"]

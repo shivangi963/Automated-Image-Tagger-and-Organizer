@@ -191,9 +191,9 @@ Authorization: Bearer <jwt>
 When an image is uploaded, a Celery task runs the following pipeline:
 
 ```
-Download from MinIO
+Download from MinIO 
     
-Extract metadata (width, height, format, EXIF)
+Extract metadata (width, height, format, EXIF) 
     
 Generate thumbnail (400×400, JPEG 85%)
     

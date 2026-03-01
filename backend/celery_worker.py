@@ -35,27 +35,26 @@ def preload_models(sender, **kwargs):
     This runs once at startup so the FIRST uploaded image processes
     at full speed instead of waiting for lazy model downloads/loads.
     """
-    logger.info("⏳ Pre-loading ML models (YOLO, BLIP, CLIP, EasyOCR)…")
+    logger.info(" Pre-loading ML models (YOLO, BLIP, CLIP, EasyOCR)…")
 
     try:
         from app.ml.yolo_detector import detector
         detector._load_model()
-        logger.info("✓ YOLO ready")
+        logger.info(" YOLO ready")
     except Exception as e:
-        logger.error(f"✗ YOLO pre-load failed: {e}")
+        logger.error(f"YOLO pre-load failed: {e}")
 
     try:
         from app.ml.scene_tagger import scene_tagger
         from PIL import Image
         import io
-        # Load both BLIP and CLIP by running a tiny dummy image through the tagger
         dummy = Image.new("RGB", (32, 32), color=(128, 128, 128))
         scene_tagger._load_blip()
-        logger.info("✓ BLIP ready")
+        logger.info(" BLIP ready")
         scene_tagger._load_clip()
-        logger.info("✓ CLIP ready")
+        logger.info(" CLIP ready")
     except Exception as e:
-        logger.error(f"✗ BLIP/CLIP pre-load failed: {e}")
+        logger.error(f" BLIP/CLIP pre-load failed: {e}")
 
     try:
         from app.ml.ocr import ocr_extractor
