@@ -4,23 +4,23 @@ An AI-powered image management platform that automatically tags, captions, and o
 
 ---
 
-##  Features
+## Features
 
 - **AI Auto-Tagging** — YOLO detects objects (person, car, dog…); CLIP classifies scenes (beach, sunset, indoors…)
 - **Natural Language Captions** — BLIP generates human-readable descriptions for every image
-- **OCR Text Extraction** — EasyOCR reads text embedded in images (signs, labels, screenshots)
+- **Smart OCR Text Extraction** — EasyOCR reads text embedded in images (receipts, handwritten notes, signs, labels, screenshots) with spatially-aligned output that preserves the original layout
 - **Duplicate Detection** — Perceptual hashing (pHash) finds near-duplicate images with configurable similarity threshold
 - **Smart Search** — Full-text search across all AI-generated tags and extracted text
 - **Albums** — Create and manage curated collections
 - **Async Processing** — Celery + Redis pipeline handles AI inference in the background so uploads feel instant
 - **Presigned Uploads** — Files go directly from browser to MinIO (no proxy through FastAPI)
 
-
 ---
 
 ## Tech Stack
 
 | Layer | Technology |
+|---|---|
 | Frontend | React 19, Vite 7, MUI v7, TanStack Query, Axios |
 | Backend | FastAPI, Python 3.11+, Pydantic v2 |
 | Task Queue | Celery 5, Redis 7 |
@@ -34,7 +34,7 @@ An AI-powered image management platform that automatically tags, captions, and o
 
 ---
 
-##  Start
+## Start
 
 ### Prerequisites
 
@@ -97,10 +97,9 @@ npm run dev
 
 Open [http://localhost:5173](http://localhost:5173).
 
-
 ---
 
-##  Environment Variables
+## Environment Variables
 
 Create a `.env` file in the project root. All values below are the defaults for local development.
 
@@ -140,7 +139,7 @@ CORS_ORIGINS=http://localhost:5173
 
 ---
 
-##  API Reference
+## API Reference
 
 Base URL: `http://localhost:8000`
 
@@ -152,6 +151,7 @@ Authorization: Bearer <jwt>
 ### Auth
 
 | Method | Path | Description |
+|---|---|---|
 | POST | `/auth/register` | Create account, returns JWT |
 | POST | `/auth/login` | Login, returns JWT |
 | GET | `/auth/me` | Current user info |
@@ -159,6 +159,7 @@ Authorization: Bearer <jwt>
 ### Images
 
 | Method | Path | Description |
+|---|---|---|
 | GET | `/images/` | List all images (with embedded URLs) |
 | GET | `/images/{id}` | Single image detail |
 | POST | `/images/presign` | Get presigned PUT URL for direct MinIO upload |
@@ -166,34 +167,48 @@ Authorization: Bearer <jwt>
 | POST | `/images/upload` | Multipart upload (alternative to presign+ingest) |
 | DELETE | `/images/{id}` | Delete image from storage and DB |
 
+Image responses include the following OCR fields when available:
+
+```json
+{
+  "ocr_text": "TOTAL  $24.99\nTHANK YOU",
+  "ocr_regions": [
+    { "text": "TOTAL", "confidence": 0.97, "bbox": [[x1,y1],[x2,y2],[x3,y3],[x4,y4]] },
+    { "text": "$24.99", "confidence": 0.94, "bbox": [...] }
+  ]
+}
+```
+
 ### Search
 
 | Method | Path | Query Params | Description |
+|---|---|---|---|
 | GET | `/search/` | `query`, `tags`, `date_from`, `date_to`, `skip`, `limit` | Full-text + tag search |
 | GET | `/search/duplicates` | `threshold` (default 10) | Find duplicate groups |
 
 ### Albums
 
-| Method |  Path |            Description |
-| GET |   `/albums/` |       List user albums |
-| POST |  `/albums/` |       Create album |
-| GET |   `/albums/{id}` |   Album detail |
-| PUT |   `/albums/{id}` |   Update album name/description |
-| DELETE |`/albums/{id}` |    Delete album |
-| GET |   `/albums/{id}/images` | Images in album |
-| POST |  `/albums/{id}/images` | Add images to album |
-| DELETE |`/albums/{id}/images/{image_id}` | Remove image from album |
+| Method | Path | Description |
+|---|---|---|
+| GET | `/albums/` | List user albums |
+| POST | `/albums/` | Create album |
+| GET | `/albums/{id}` | Album detail |
+| PUT | `/albums/{id}` | Update album name/description |
+| DELETE | `/albums/{id}` | Delete album |
+| GET | `/albums/{id}/images` | Images in album |
+| POST | `/albums/{id}/images` | Add images to album |
+| DELETE | `/albums/{id}/images/{image_id}` | Remove image from album |
 
+---
 
-
-##  AI Pipeline
+## AI Pipeline
 
 When an image is uploaded, a Celery task runs the following pipeline:
 
 ```
-Download from MinIO 
+Download from MinIO
     
-Extract metadata (width, height, format, EXIF) 
+Extract metadata (width, height, format, EXIF)
     
 Generate thumbnail (400×400, JPEG 85%)
     
@@ -206,11 +221,11 @@ BLIP keyword extraction → ["dog", "running", "beach"]
     
 CLIP zero-shot scenes  → ["beach", "daytime", "blue sky"]
     
-EasyOCR text extraction → ["STOP", "Main St"]
+EasyOCR text extraction → ocr_text + ocr_regions (with bounding boxes & confidence)
     
 Merge all tags + deduplicate
     
-Save to MongoDB (tags, caption, ocr_text, thumbnail_key, status: completed)
+Save to MongoDB (tags, caption, ocr_text, ocr_regions, thumbnail_key, status: completed)
 ```
 
 **Tag sources stored per tag:**
@@ -221,7 +236,61 @@ Save to MongoDB (tags, caption, ocr_text, thumbnail_key, status: completed)
 
 ---
 
-##  Development Tips
+## OCR Feature
+
+### How it works
+
+When the AI pipeline processes an image, EasyOCR scans for embedded text and stores two things in MongoDB: a plain `ocr_text` string containing all detected words, and an `ocr_regions` array where each entry holds the word, its confidence score (0–1), and a four-point bounding box describing its exact position in the image.
+
+### Automatic detection
+
+The gallery UI automatically detects images that likely contain text — receipts, invoices, handwritten notes, whiteboards, signs, menus, screenshots, and similar document types — based on AI tags and the presence of OCR data. Detected images show a **"Text detected"** badge on their gallery card.
+
+### OCR panel in image detail
+
+Clicking any image opens a detail dialog. When text is present, an **OCR Text Extraction** panel appears below the AI tags and caption. The panel:
+
+- **Reconstructs the spatial layout** — words are placed horizontally using their bounding-box positions, so columns, indentation, and table-like structures are preserved as closely as possible in plain text.
+- **Shows document type** — auto-labels the content as Receipt, Invoice, Note, Handwritten, or Document based on detected tags and text content.
+- **Preview / expand** — collapses to the first three lines by default; click the expand icon to reveal the full text.
+- **Word confidence breakdown** — the expanded view shows each word as a colour-coded chip: green (≥ 80 % confidence), amber (50–79 %), or red (< 50 %).
+- **Copy to clipboard** — a single click copies the complete spatially-aligned text.
+
+### Supported document types
+
+| Document type | Auto-detected from tags |
+|---|---|
+| Receipt / Invoice / Bill | `receipt`, `invoice`, `bill` |
+| Handwritten note | `note`, `notes`, `handwritten`, `handwriting` |
+| Printed document | `document`, `paper`, `page`, `letter`, `form` |
+| Public signage | `sign`, `label`, `poster`, `menu` |
+| Digital screenshot | `screenshot`, `whiteboard`, `blackboard` |
+
+### OCR data schema (MongoDB)
+
+```json
+{
+  "ocr_text": "STORE NAME\nDate: 01/03/2026\nTotal  $24.99",
+  "ocr_regions": [
+    {
+      "text": "STORE NAME",
+      "confidence": 0.98,
+      "bbox": [[120, 30], [340, 30], [340, 58], [120, 58]]
+    },
+    {
+      "text": "Date:",
+      "confidence": 0.95,
+      "bbox": [[120, 72], [195, 72], [195, 96], [120, 96]]
+    }
+  ]
+}
+```
+
+Each bounding box is `[[x1,y1], [x2,y2], [x3,y3], [x4,y4]]` in top-left → top-right → bottom-right → bottom-left order, matching EasyOCR's native output.
+
+---
+
+## Development Tips
 
 ### Check Celery task status
 
@@ -244,11 +313,12 @@ Open [http://localhost:9001](http://localhost:9001) — login with `minioadmin` 
 ```bash
 docker compose down -v   # removes named volumes (all data)
 docker compose up -d
-``
+```
 
 ### Run with a better YOLO model
 
 Edit `.env`:
+
 ```env
 YOLO_MODEL=yolov8s.pt    # small — better accuracy, ~22 MB
 # or
@@ -259,18 +329,7 @@ YOLO_MODEL=yolov8m.pt    # medium — best CPU accuracy, ~52 MB
 
 If you have CUDA, torch will automatically use the GPU for BLIP and CLIP (see `SceneTagger._device`). For YOLO, set `device=0` in `detect_objects()`.
 
----
 
-##  Production Checklist
-
-- [ ] Change `SECRET_KEY` to a long random string
-- [ ] Set `MINIO_SECURE=true` and use HTTPS endpoints
-- [ ] Use strong MongoDB credentials
-- [ ] Set `CORS_ORIGINS` to your actual frontend domain
-- [ ] Use a production WSGI server: `gunicorn -w 4 -k uvicorn.workers.UvicornWorker app.main:app`
-- [ ] Run Celery workers behind a process manager (systemd, supervisord)
-- [ ] Add rate limiting to auth endpoints
-- [ ] Store JWT secret in a secrets manager, not in `.env`
 
 ---
 
@@ -284,9 +343,6 @@ Python packages of note (see `requirements.txt` for pinned versions):
 - `celery`, `redis` — distributed task queue
 - `ultralytics` — YOLOv8
 - `transformers` — BLIP + CLIP (Hugging Face)
-- `easyocr` — OCR
+- `easyocr` — OCR engine with bounding-box + confidence output
 - `imagehash`, `pillow` — image utilities
 - `python-jose`, `passlib`, `argon2-cffi` — auth
-
----
-

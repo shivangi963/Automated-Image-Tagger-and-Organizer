@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
-  Box, Button, Grid, Card, CardMedia, CardContent, Typography,
+  Box, Button, Card, CardMedia, CardContent, Typography,
   Chip, CircularProgress, Alert, Container, Paper, InputBase, IconButton,
   Tooltip
 } from '@mui/material';
@@ -149,61 +149,72 @@ export default function Search() {
             <Button variant="outlined" onClick={handleClear}>Clear Search</Button>
           </Box>
         )}
-        <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-          <Box sx={{ maxWidth: 1400, width: '100%' }}>
-            <Grid container spacing={3}>
-              {images.map((img) => {
-                const tags = getTags(img);
-                return (
-                  <Grid item xs={12} sm={6} md={4} lg={3} key={img._id || img.id}>
-                    <Card
-                      sx={{
-                        height: '100%', display: 'flex', flexDirection: 'column',
-                        transition: 'all 0.3s',
-                        '&:hover': { transform: 'translateY(-4px)', boxShadow: 4 },
-                      }}
-                    >
-                      <CardMedia
-                        component="img"
-                        height="200"
-                        image={img.thumbnailUrl || img.url || ''}
-                        alt={img.original_filename || img.filename}
-                        sx={{ objectFit: 'cover' }}
-                      />
-                      <CardContent>
-                        <Tooltip title={img.original_filename || img.filename}>
-                          <Typography variant="subtitle2" noWrap gutterBottom>
-                            {img.original_filename || img.filename}
-                          </Typography>
-                        </Tooltip>
-                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                          {tags.map((tagName, idx) => {
-                            const isMatch = search && tagName.toLowerCase().includes(search.toLowerCase());
-                            return (
-                              <Chip
-                                key={idx}
-                                label={tagName}
-                                size="small"
-                                sx={{
-                                  fontSize: '0.7rem',
-                                  height: 24,
-                                  bgcolor: isMatch ? '#1565c0' : '#1976d2',  
-                                  color: 'white',
-                                  fontWeight: isMatch ? 700 : 500,
-                                  border: isMatch ? '2px solid #0d47a1' : 'none',
-                                }}
-                              />
-                            );
-                          })}
-                        </Box>
-                      </CardContent>
-                    </Card>
-                  </Grid>
-                );
-              })}
-            </Grid>
+
+        {/* ── Results Grid — native CSS grid (MUI v7 Grid xs/sm/md/lg props are broken) ── */}
+        {!isLoading && images.length > 0 && (
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: {
+                xs: '1fr',
+                sm: 'repeat(2, 1fr)',
+                md: 'repeat(3, 1fr)',
+                lg: 'repeat(4, 1fr)',
+              },
+              gap: 3,
+            }}
+          >
+            {images.map((img) => {
+              const tags = getTags(img);
+              return (
+                <Card
+                  key={img._id || img.id}
+                  sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    transition: 'all 0.3s',
+                    '&:hover': { transform: 'translateY(-4px)', boxShadow: 4 },
+                  }}
+                >
+                  <CardMedia
+                    component="img"
+                    image={img.thumbnailUrl || img.url || ''}
+                    alt={img.original_filename || img.filename}
+                    sx={{ width: '100%', height: 200, objectFit: 'cover' }}
+                  />
+                  <CardContent>
+                    <Tooltip title={img.original_filename || img.filename}>
+                      <Typography variant="subtitle2" noWrap gutterBottom>
+                        {img.original_filename || img.filename}
+                      </Typography>
+                    </Tooltip>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                      {tags.map((tagName, idx) => {
+                        const isMatch =
+                          search && tagName.toLowerCase().includes(search.toLowerCase());
+                        return (
+                          <Chip
+                            key={idx}
+                            label={tagName}
+                            size="small"
+                            sx={{
+                              fontSize: '0.7rem',
+                              height: 24,
+                              bgcolor: isMatch ? '#1565c0' : '#1976d2',
+                              color: 'white',
+                              fontWeight: isMatch ? 700 : 500,
+                              border: isMatch ? '2px solid #0d47a1' : 'none',
+                            }}
+                          />
+                        );
+                      })}
+                    </Box>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </Box>
-        </Box>
+        )}
       </Container>
     </AppLayout>
   );
