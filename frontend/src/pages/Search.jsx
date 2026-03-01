@@ -87,7 +87,7 @@ export default function Search() {
 
         {/* Search Tips */}
         {!search && (
-          <Paper sx={{ p: 3, mb: 4, bgcolor: 'info.lighter' }}>
+          <Paper sx={{ p: 3, mb: 4, bgcolor: 'info.light', opacity: 0.85 }}>
             <Typography variant="h6" gutterBottom>
               Search Tips
             </Typography>
@@ -105,7 +105,7 @@ export default function Search() {
 
         {/* Results Info */}
         {search && !isLoading && (
-          <Paper sx={{ p: 2, mb: 3, bgcolor: total > 0 ? 'success.lighter' : 'warning.lighter' }}>
+          <Paper sx={{ p: 2, mb: 3, bgcolor: total > 0 ? 'success.light' : 'warning.light' }}>
             <Typography variant="body1">
               {total > 0 ? (
                 <>Found <strong>{total}</strong> result{total !== 1 ? 's' : ''} for "<strong>{search}</strong>"</>

@@ -30,7 +30,7 @@ import os
 logger = logging.getLogger(__name__)
 
 
-def get_db():
+def get_sync_db():
     """Synchronous MongoDB connection for Celery tasks."""
     client = MongoClient(
         settings.MONGODB_URL,
@@ -111,7 +111,7 @@ def _merge_tags(
 
 @celery_app.task(bind=True, name="process_image", max_retries=3)
 def process_image(self, image_id: str):
-    db = get_db()
+    db = get_sync_db()
 
     try:
         logger.info(f"[{image_id}] ─── Starting pipeline ───")

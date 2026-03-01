@@ -4,10 +4,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Box, Grid, Card, CardMedia, CardContent, Typography, CircularProgress,
   Alert, Container, IconButton, Chip, Button, Dialog, DialogTitle,
-  DialogContent, List, ListItem, ListItemText, Checkbox, DialogActions,
+  DialogContent, List, ListItemButton, ListItemText, Checkbox, DialogActions,
   Breadcrumbs, Link, Tooltip
 } from '@mui/material';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import AddPhotoAlternateIcon from '@mui/icons-material/AddPhotoAlternate';
 import DeleteIcon from '@mui/icons-material/Delete';
 import api from '../api/axiosClient.js';
@@ -225,11 +224,10 @@ export default function AlbumDetail() {
             {allImages
               .filter(img => !images.find(albumImg => (albumImg._id || albumImg.id) === (img._id || img.id)))
               .map((img) => (
-                <ListItem
-                  key={img._id || img.id}
-                  button
-                  onClick={() => handleToggleImage(img._id || img.id)}
-                >
+                <ListItemButton
+                    key={img._id || img.id}
+                    onClick={() => handleToggleImage(img._id || img.id)}
+                  >
                   <Checkbox
                     checked={selectedImages.includes(img._id || img.id)}
                     tabIndex={-1}
@@ -245,7 +243,7 @@ export default function AlbumDetail() {
                     primary={img.filename || img.name}
                     secondary={`${(img.tags || []).length} tags`}
                   />
-                </ListItem>
+                </ListItemButton>
               ))}
             {allImages.length === 0 && (
               <Typography variant="body2" color="textSecondary" align="center" sx={{ py: 4 }}>

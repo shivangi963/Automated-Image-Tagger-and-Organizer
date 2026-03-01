@@ -14,40 +14,13 @@ import getErrorMessage from '../utils/getErrorMessage.js';
 import AppLayout from '../components/AppLayout.jsx';
 
 async function fetchDuplicates() {
-  try {
-    const res = await api.get('/search/duplicates');
-    const groups = res.data || [];
-    
-    // Enrich each image in each group with URLs
-    const enrichedGroups = await Promise.all(
-      groups.map(async (group) => {
-        const enrichedImages = await Promise.all(
-          (group.images || []).map(async (img) => {
-            try {
-              const urlRes = await api.get(`/images/${img._id || img.id}/url`);
-              return {
-                ...img,
-                url: urlRes.data.url,
-                thumbnailUrl: urlRes.data.url
-              };
-            } catch (error) {
-              console.error('Error getting image URL:', error);
-              return img;
-            }
-          })
-        );
-        return {
-          ...group,
-          images: enrichedImages
-        };
-      })
-    );
-    
-    return enrichedGroups;
-  } catch (error) {
-    console.error('Error fetching duplicates:', error);
-    throw error;
-  }
+  const res = await api.get('/duplicates');
+  const data = res.data;
+  // /duplicates returns { groups, total_duplicates, groups_count }
+  return (data.groups || []).map((group) => ({
+    images: group,
+    similarity_score: 0, // phash groups don't expose similarity; set to 0 or compute if needed
+  }));
 }
 
 async function deleteImage(imageId) {
