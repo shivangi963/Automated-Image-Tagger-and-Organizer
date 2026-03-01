@@ -16,7 +16,6 @@ import api from '../api/axiosClient.js';
 import getErrorMessage from '../utils/getErrorMessage.js';
 import AppLayout from '../components/AppLayout.jsx';
 
-// Backend _make_image_dict already embeds `url` and `thumbnailUrl` — no extra calls needed.
 const fetchImages = async (search) => {
   if (search && search.trim()) {
     const res = await api.get('/search', { params: { query: search.trim() } });
@@ -102,7 +101,8 @@ export default function Gallery() {
   return (
     <AppLayout title="Gallery">
       <Container maxWidth="xl" sx={{ py: 3 }}>
-        {/* Action Bar */}
+
+        {/* ── Search / Upload bar — BLUE ── */}
         <Box sx={{ display: 'flex', justifyContent: 'center', mb: 4 }}>
           <Paper
             elevation={0}
@@ -110,12 +110,13 @@ export default function Gallery() {
               p: 3,
               width: '100%',
               maxWidth: 900,
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              bgcolor: '#1976d2',          // solid MUI primary blue
               borderRadius: 3,
-              boxShadow: '0 8px 32px rgba(102, 126, 234, 0.25)',
+              boxShadow: '0 8px 32px rgba(25, 118, 210, 0.30)',
             }}
           >
             <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap' }}>
+              {/* Search input */}
               <Paper sx={{ flex: 1, display: 'flex', alignItems: 'center', borderRadius: 2, minWidth: 300, maxWidth: 500 }}>
                 <SearchIcon sx={{ ml: 2, color: 'text.secondary' }} />
                 <InputBase
@@ -132,30 +133,39 @@ export default function Gallery() {
                 )}
               </Paper>
 
+              {/* Search button */}
               <Button
                 variant="contained"
                 startIcon={<SearchIcon />}
                 onClick={() => setSearch(searchInput)}
-                sx={{ bgcolor: 'white', color: 'primary.main', '&:hover': { bgcolor: 'grey.100' }, fontWeight: 600, px: 3 }}
+                sx={{
+                  bgcolor: 'white',
+                  color: '#1976d2',
+                  '&:hover': { bgcolor: '#e3f2fd' },
+                  fontWeight: 600,
+                  px: 3,
+                  boxShadow: 'none',
+                }}
               >
                 Search
               </Button>
 
               <input ref={fileRef} type="file" multiple accept="image/*" style={{ display: 'none' }} onChange={onFilesSelected} />
 
+              {/* Upload button */}
               <Button
                 variant="contained"
                 startIcon={<CloudUploadIcon />}
                 onClick={() => fileRef.current?.click()}
                 disabled={uploading}
                 sx={{
-                  bgcolor: 'rgba(255,255,255,0.2)',
-                  backdropFilter: 'blur(10px)',
+                  bgcolor: 'rgba(255,255,255,0.18)',
                   color: 'white',
                   fontWeight: 600,
                   px: 3,
-                  border: '1px solid rgba(255,255,255,0.3)',
-                  '&:hover': { bgcolor: 'rgba(255,255,255,0.3)' },
+                  border: '1px solid rgba(255,255,255,0.4)',
+                  '&:hover': { bgcolor: 'rgba(255,255,255,0.30)' },
+                  boxShadow: 'none',
                 }}
               >
                 Upload
@@ -171,7 +181,7 @@ export default function Gallery() {
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
                 <AutoAwesomeIcon color="primary" />
                 <Typography variant="body1" sx={{ flex: 1 }}>
-                  Uploading and AI processing... {uploadProgress}%
+                  Uploading and AI processing… {uploadProgress}%
                 </Typography>
               </Box>
               <LinearProgress
@@ -181,7 +191,7 @@ export default function Gallery() {
                   height: 8,
                   borderRadius: 4,
                   bgcolor: 'grey.200',
-                  '& .MuiLinearProgress-bar': { borderRadius: 4, background: 'linear-gradient(90deg, #667eea 0%, #764ba2 100%)' },
+                  '& .MuiLinearProgress-bar': { borderRadius: 4, bgcolor: '#1976d2' },
                 }}
               />
             </Paper>
@@ -251,11 +261,7 @@ export default function Gallery() {
                   size="large"
                   startIcon={<CloudUploadIcon />}
                   onClick={() => fileRef.current?.click()}
-                  sx={{
-                    px: 4, py: 1.5, fontSize: '1.1rem', fontWeight: 600,
-                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                    boxShadow: '0 4px 20px rgba(102, 126, 234, 0.4)',
-                  }}
+                  sx={{ px: 4, py: 1.5, fontSize: '1.1rem', fontWeight: 600 }}
                 >
                   Upload Images
                 </Button>
@@ -308,7 +314,7 @@ export default function Gallery() {
                               <Chip
                                 label={`${tags.length} AI tags`}
                                 size="small"
-                                color="success"
+                                color="primary"
                                 icon={<AutoAwesomeIcon />}
                                 sx={{ position: 'absolute', top: 12, right: 12, fontWeight: 600 }}
                               />
@@ -330,14 +336,20 @@ export default function Gallery() {
                                       label={tag}
                                       size="small"
                                       sx={{
-                                        fontSize: '0.7rem', height: 24,
-                                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                                        color: 'white', fontWeight: 500,
+                                        fontSize: '0.7rem',
+                                        height: 24,
+                                        bgcolor: '#1976d2',   // ← blue
+                                        color: 'white',
+                                        fontWeight: 500,
                                       }}
                                     />
                                   ))}
                                   {tags.length > 6 && (
-                                    <Chip label={`+${tags.length - 6}`} size="small" sx={{ fontSize: '0.7rem', height: 24 }} />
+                                    <Chip
+                                      label={`+${tags.length - 6}`}
+                                      size="small"
+                                      sx={{ fontSize: '0.7rem', height: 24, bgcolor: '#1565c0', color: 'white' }}
+                                    />
                                   )}
                                 </>
                               ) : (
@@ -414,7 +426,7 @@ export default function Gallery() {
                     <Chip
                       key={idx}
                       label={tag}
-                      sx={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white', fontWeight: 500 }}
+                      sx={{ bgcolor: '#1976d2', color: 'white', fontWeight: 500 }}  // ← blue
                     />
                   ))
                 ) : (

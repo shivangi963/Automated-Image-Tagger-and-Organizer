@@ -12,7 +12,6 @@ import api from '../api/axiosClient.js';
 import getErrorMessage from '../utils/getErrorMessage.js';
 import AppLayout from '../components/AppLayout.jsx';
 
-// Backend search endpoint already embeds `url` and `thumbnailUrl` via _make_image_dict.
 const searchImages = async (query) => {
   if (!query || !query.trim()) return { images: [], total: 0 };
   const res = await api.get('/search', { params: { query: query.trim() } });
@@ -88,9 +87,7 @@ export default function Search() {
         {/* Search Tips */}
         {!search && (
           <Paper sx={{ p: 3, mb: 4, bgcolor: 'info.light', opacity: 0.85 }}>
-            <Typography variant="h6" gutterBottom>
-              Search Tips
-            </Typography>
+            <Typography variant="h6" gutterBottom>Search Tips</Typography>
             <Typography variant="body2" paragraph>
               • Search for objects: <strong>person</strong>, <strong>car</strong>, <strong>dog</strong>
             </Typography>
@@ -135,9 +132,7 @@ export default function Search() {
         {!search && !isLoading && (
           <Box display="flex" flexDirection="column" alignItems="center" py={8}>
             <ImageSearchIcon sx={{ fontSize: 120, color: 'grey.300', mb: 2 }} />
-            <Typography variant="h5" color="textSecondary" gutterBottom>
-              Start Searching
-            </Typography>
+            <Typography variant="h5" color="textSecondary" gutterBottom>Start Searching</Typography>
             <Typography variant="body1" color="textSecondary" align="center">
               Enter keywords to find images by their AI-detected tags
             </Typography>
@@ -147,15 +142,11 @@ export default function Search() {
         {search && !isLoading && images.length === 0 && (
           <Box display="flex" flexDirection="column" alignItems="center" py={8}>
             <ImageSearchIcon sx={{ fontSize: 120, color: 'grey.300', mb: 2 }} />
-            <Typography variant="h5" color="textSecondary" gutterBottom>
-              No Images Found
-            </Typography>
+            <Typography variant="h5" color="textSecondary" gutterBottom>No Images Found</Typography>
             <Typography variant="body1" color="textSecondary" align="center" sx={{ mb: 2 }}>
               Try different keywords or check your spelling
             </Typography>
-            <Button variant="outlined" onClick={handleClear}>
-              Clear Search
-            </Button>
+            <Button variant="outlined" onClick={handleClear}>Clear Search</Button>
           </Box>
         )}
 
@@ -193,8 +184,14 @@ export default function Search() {
                             key={idx}
                             label={tagName}
                             size="small"
-                            variant={isMatch ? 'filled' : 'outlined'}
-                            color={isMatch ? 'primary' : 'default'}
+                            sx={{
+                              fontSize: '0.7rem',
+                              height: 24,
+                              bgcolor: isMatch ? '#1565c0' : '#1976d2',  // darker blue for matches
+                              color: 'white',
+                              fontWeight: isMatch ? 700 : 500,
+                              border: isMatch ? '2px solid #0d47a1' : 'none',
+                            }}
                           />
                         );
                       })}

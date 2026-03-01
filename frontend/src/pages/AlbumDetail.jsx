@@ -79,9 +79,7 @@ export default function AlbumDetail() {
 
   const handleToggleImage = (imageId) => {
     setSelectedImages(prev =>
-      prev.includes(imageId)
-        ? prev.filter(id => id !== imageId)
-        : [...prev, imageId]
+      prev.includes(imageId) ? prev.filter(id => id !== imageId) : [...prev, imageId]
     );
   };
 
@@ -106,13 +104,9 @@ export default function AlbumDetail() {
         {/* Header */}
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
           <Box>
-            <Typography variant="h4" gutterBottom>
-              {album?.name}
-            </Typography>
+            <Typography variant="h4" gutterBottom>{album?.name}</Typography>
             {album?.description && (
-              <Typography variant="body1" color="textSecondary">
-                {album.description}
-              </Typography>
+              <Typography variant="body1" color="textSecondary">{album.description}</Typography>
             )}
             <Typography variant="caption" color="textSecondary">
               {images.length} image{images.length !== 1 ? 's' : ''}
@@ -134,18 +128,14 @@ export default function AlbumDetail() {
         )}
 
         {isError && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {getErrorMessage(error)}
-          </Alert>
+          <Alert severity="error" sx={{ mb: 2 }}>{getErrorMessage(error)}</Alert>
         )}
 
         {/* Empty State */}
         {!isLoading && images.length === 0 && (
           <Box display="flex" flexDirection="column" alignItems="center" py={8}>
             <AddPhotoAlternateIcon sx={{ fontSize: 120, color: 'grey.300', mb: 2 }} />
-            <Typography variant="h5" color="textSecondary" gutterBottom>
-              No images in this album
-            </Typography>
+            <Typography variant="h5" color="textSecondary" gutterBottom>No images in this album</Typography>
             <Typography variant="body1" color="textSecondary" sx={{ mb: 3 }}>
               Add images to get started
             </Typography>
@@ -166,11 +156,9 @@ export default function AlbumDetail() {
             <Grid item xs={12} sm={6} md={4} lg={3} key={img._id || img.id}>
               <Card
                 sx={{
-                  height: '100%',
-                  display: 'flex',
-                  flexDirection: 'column',
+                  height: '100%', display: 'flex', flexDirection: 'column',
                   transition: 'all 0.3s',
-                  '&:hover': { transform: 'translateY(-4px)', boxShadow: 4 }
+                  '&:hover': { transform: 'translateY(-4px)', boxShadow: 4 },
                 }}
               >
                 <CardMedia
@@ -182,9 +170,7 @@ export default function AlbumDetail() {
                 />
                 <CardContent sx={{ flexGrow: 1 }}>
                   <Tooltip title={img.filename || img.name}>
-                    <Typography variant="subtitle2" noWrap>
-                      {img.filename || img.name}
-                    </Typography>
+                    <Typography variant="subtitle2" noWrap>{img.filename || img.name}</Typography>
                   </Tooltip>
                   <Box sx={{ mt: 1, display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
                     {(img.tags || []).slice(0, 3).map((tag, idx) => (
@@ -192,7 +178,7 @@ export default function AlbumDetail() {
                         key={idx}
                         label={typeof tag === 'string' ? tag : (tag.name || tag.label || tag.tag_name)}
                         size="small"
-                        variant="outlined"
+                        sx={{ bgcolor: '#1976d2', color: 'white', fontSize: '0.7rem', height: 22 }}  // ← blue
                       />
                     ))}
                   </Box>
@@ -225,9 +211,9 @@ export default function AlbumDetail() {
               .filter(img => !images.find(albumImg => (albumImg._id || albumImg.id) === (img._id || img.id)))
               .map((img) => (
                 <ListItemButton
-                    key={img._id || img.id}
-                    onClick={() => handleToggleImage(img._id || img.id)}
-                  >
+                  key={img._id || img.id}
+                  onClick={() => handleToggleImage(img._id || img.id)}
+                >
                   <Checkbox
                     checked={selectedImages.includes(img._id || img.id)}
                     tabIndex={-1}
